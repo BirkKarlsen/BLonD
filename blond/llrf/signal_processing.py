@@ -95,12 +95,12 @@ def modulator(signal, omega_i, omega_f, T_sampling, phi_0=0):
         #TypeError
         raise RuntimeError("ERROR in filters.py/demodulator: signal should" +
                            " be an array!")
-    delta_phi = (omega_i - omega_f)*T_sampling * np.arange(len(signal))
+    delta_phi = (omega_i - omega_f) * T_sampling * np.arange(len(signal))
     # Pre compute sine and cosine for speed up
     cs = np.cos(delta_phi + phi_0)
     sn = np.sin(delta_phi + phi_0)
-    I_new = cs*signal.real - sn*signal.imag
-    Q_new = sn*signal.real + cs*signal.imag
+    I_new = cs*signal.real + sn*signal.imag
+    Q_new = - sn*signal.real + cs*signal.imag
 
     return I_new + 1j*Q_new
 

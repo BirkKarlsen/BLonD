@@ -91,14 +91,16 @@ class SPSCavityFeedback(object):
         A Beam type class
     Profile : class
         A Profile type class
-    G_llrf : float or list
-        LLRF Gain [1]; if passed as a float, both 3- and 4-section (4- and
-        5-section) cavities have the same G_llrf in the post- (pre-)LS2
+    G_ff : float or list
+        FF gain [1]; if passed as a float, both 3- and 4-section (4- and
+        5-section) cavities have the same G_ff in the post- (pre-)LS2
         scenario. If passed as a list, the first and second elements correspond
-        to the G_llrf of the 3- and 4-section (4- and 5-section) cavity
+        to the G_ff of the 3- and 4-section (4- and 5-section) cavity
         feedback in the post- (pre-)LS2 scenario; default is 10
+    G_llrf : float or list
+        LLRF Gain [1]; convention same as G_ff; default is 10
     G_tx : float or list
-        Transmitter gain [1] of the cavity feedback; convention same as G_llrf;
+        Transmitter gain [1] of the cavity feedback; convention same as G_ff;
         default is 0.5
     a_comb : float
         Comb filter ratio [1]; default is 15/16
@@ -112,6 +114,9 @@ class SPSCavityFeedback(object):
         (0,1). Default is None and will result in 6/10 for the 3-section
         cavities in the post-LS2 scenario and 4/9 for the 4-section cavities in
         the pre-LS2 scenario
+    df : float or list
+        Frequency difference between measured frequency and desired frequency;
+        same convetion as G_ff; default is 0
 
     Attributes
     ----------
@@ -244,7 +249,7 @@ class SPSCavityFeedback(object):
 
         # Calculate OTFB correction w.r.t. RF voltage and phase in RFStation
         self.V_corr /= self.rf.voltage[0, self.rf.counter[0]]
-        self.phi_corr = (self.alpha_sum - np.angle(self.OTFB_1.V_SET[-self.OTFB_1.n_coarse])) # TODO: Added a minus 02/02/2022
+        self.phi_corr = (self.alpha_sum - np.angle(self.OTFB_1.V_SET[-self.OTFB_1.n_coarse]))
 
     def track_init(self, debug=False):
         r''' Tracking of the SPSCavityFeedback without beam.
@@ -280,11 +285,73 @@ class SPSCavityFeedback(object):
 
         # Calculate OTFB correction w.r.t. RF voltage and phase in RFStation
         self.V_corr /= self.rf.voltage[0, self.rf.counter[0]]
-        self.phi_corr = (self.alpha_sum - np.angle(self.OTFB_1.V_SET[-self.OTFB_1.n_coarse])) # TODO: Added a minus 02/02/2022
+        self.phi_corr = (self.alpha_sum - np.angle(self.OTFB_1.V_SET[-self.OTFB_1.n_coarse]))
 
 
 
 class SPSOneTurnFeedback(object):
+    r"""Voltage feedback around a travelling wave cavity with a given amount of
+    sections. The quantities of the LLRF system cover two turns with a coarse
+    resolution.
+
+    Parameters
+    ----------
+    RFStation : class
+        An RFStation type class
+    Beam : class
+        A Beam type class
+    Profile : class
+        Beam profile object
+    n_sections : int
+        Number of sections in the cavities
+    n_cavities : int
+        Number of cavities of the same type; default is 4
+    V_part : float
+        Voltage partition for the given n_cavities; in range (0,1); default is 4/9
+    G_ff : float
+        FF gain [1]; default is 1
+    G_llrf : float
+        LLRF gain [1]; default is 10
+    G_tx : float
+        Transmitter gain [A/V]; default is :math:`(50 \Omega)^{-1}`
+    a_comb : float
+        Coefficient for Comb-filter; default is 63/64
+    df : float
+        Frequency difference between measured frequency and desired frequency; default is 0
+    Commissioning : class
+        A CavityFeedbackCommissioning object
+
+    Attributes
+    ----------
+    TWC : class
+        A TravellingWaveCavity type class
+    counter : int
+        Counter of the current time step
+    omega_c : float
+        Carrier angular frequency [rad/s] at the current time step
+    omega_r : const float
+        Resonant angular frequency [rad/s] of the travelling wave cavities
+    n_coarse : int
+        Number of bins for the coarse gird (equal to the harmonic number)
+    V_IND_COARSE_GEN : complex array
+        Generator voltage [V] of the present turn in (I,Q) coordinates
+    V_IND_FINE_BEAM : complex array
+        Beam-induced voltage [V] in (I,Q) coordinates on the fine grid
+        used for tracking the beam
+    V_IND_COARSE_BEAM : complex array
+        Beam-induced voltage [V] in (I,Q) coordinates on the coarse grid
+        used internally for LLRF tracking
+    V_ANT_FINE : complex array
+        Antenna voltage [V] at present and last turn in (I,Q) coordinates
+        which is used for tracking the beam
+    V_ANT : complex array
+        Antenna voltage [V] at present and last turn in (I,Q) coordinates
+        which is used internally for LLRF tracking
+    logger : logger
+        Logger of the present class
+
+    Note: All currents are in units of charge because the sampling time drops out during the convolution calculation
+    """
 
     def __init__(self, RFStation, Beam, Profile, n_sections, n_cavities=4,
                  V_part=4/9, G_ff=1, G_llrf=10, G_tx=0.5, a_comb=63/64, df=0,
@@ -340,7 +407,7 @@ class SPSOneTurnFeedback(object):
         # Gain settings
         self.G_ff = float(G_ff)
         self.G_llrf = float(G_llrf)
-        self.G_tx = float(G_tx)
+        self.G_tx = float(G_tx) / (self.n_cavities)
 
         # 200 Hz travelling wave cavity (TWC) model
         if n_sections in [3, 4, 5]:
@@ -440,9 +507,12 @@ class SPSOneTurnFeedback(object):
         if self.open_FF == 1:
             self.logger.debug('Feed-forward active')
             self.n_coarse_FF = int(self.n_coarse/5)
-            self.I_BEAM_COARSE_FF = np.zeros(self.n_coarse_FF, dtype=complex)
-            self.I_FF_CORR = np.zeros(self.n_coarse_FF, dtype=complex)
-            self.V_FF_CORR = np.zeros(self.n_coarse_FF, dtype=complex)
+            self.I_BEAM_COARSE_FF = np.zeros(2 * self.n_coarse_FF, dtype=complex)
+            self.I_BEAM_COARSE_FF_MOD = np.zeros(2 * self.n_coarse_FF, dtype=complex)
+            self.I_FF_CORR_MOD = np.zeros(2 * self.n_coarse_FF, dtype=complex)
+            self.I_FF_CORR = np.zeros(2 * self.n_coarse_FF, dtype=complex)
+            self.V_FF_CORR = np.zeros(2 * self.n_coarse_FF, dtype=complex)
+            self.DV_FF = np.zeros(2 * self.n_coarse_FF, dtype=complex)
 
         self.logger.info("Class initialized")
 
@@ -478,6 +548,11 @@ class SPSOneTurnFeedback(object):
         self.V_ANT_FINE[-self.profile.n_slices:] = self.V_IND_FINE_BEAM[-self.profile.n_slices:] \
                                                    + np.interp(self.profile.bin_centers, self.rf_centers,
                                                                self.V_IND_COARSE_GEN[-self.n_coarse:])
+
+        # Feed-forward corrections
+        if self.open_FF == 1:
+            self.V_ANT[-self.n_coarse:] = self.V_FF_CORR_COARSE + self.V_ANT[-self.n_coarse:]
+            self.V_ANT_FINE[-self.profile.n_slices:] = self.V_FF_CORR_FINE + self.V_ANT_FINE[-self.profile.n_slices:]
 
     def track_no_beam(self):
 
@@ -534,9 +609,9 @@ class SPSOneTurnFeedback(object):
                                 lpf=lpf, downsample={'Ts': self.T_s, 'points': self.n_coarse},
                                 external_reference=True)
 
-        # TODO: Took out minus sign 03/02
-        self.I_FINE_BEAM[-self.profile.n_slices:] = -self.rot_IQ * self.I_FINE_BEAM[-self.profile.n_slices:]
-        self.I_COARSE_BEAM[-self.n_coarse:] = -self.rot_IQ * self.I_COARSE_BEAM[-self.n_coarse:]
+        self.I_FINE_BEAM[-self.profile.n_slices:] = -self.rot_IQ * self.I_FINE_BEAM[-self.profile.n_slices:] / \
+                                                    self.profile.bin_size
+        self.I_COARSE_BEAM[-self.n_coarse:] = -self.rot_IQ * self.I_COARSE_BEAM[-self.n_coarse:] / self.T_s
 
         # Beam-induced voltage
         self.beam_response(coarse=False)
@@ -545,28 +620,46 @@ class SPSOneTurnFeedback(object):
         # Feed-forward
         if self.open_FF == 1:
             # Calculate correction based on previous turn on coarse grid
-            for ind in range(self.n_coarse_FF):
+            # TODO: do a test where central frequency is at the RF frequency
+
+            # Resample RF beam current to FF sampling frequency
+            self.I_BEAM_COARSE_FF[:self.n_coarse_FF] = self.I_BEAM_COARSE_FF[-self.n_coarse_FF:]
+            I_COARSE_BEAM_RESHAPED = np.copy(self.I_COARSE_BEAM[-self.n_coarse:])
+            I_COARSE_BEAM_RESHAPED = I_COARSE_BEAM_RESHAPED.reshape((self.n_coarse//self.n_coarse_FF, self.n_coarse_FF))
+            self.I_BEAM_COARSE_FF[-self.n_coarse_FF:] = np.sum(I_COARSE_BEAM_RESHAPED, axis=0) / 5
+
+            # Do a down-modulation to the resonant frequency of the TWC
+            self.I_BEAM_COARSE_FF_MOD[:self.n_coarse_FF] = self.I_BEAM_COARSE_FF_MOD[-self.n_coarse_FF:]
+            self.I_BEAM_COARSE_FF_MOD[-self.n_coarse_FF:] = modulator(self.I_BEAM_COARSE_FF[-self.n_coarse_FF:],
+                                                                  omega_i=self.omega_c, omega_f=self.omega_r,
+                                                                  T_sampling= 5 * self.T_s,
+                                                                  phi_0=(self.dphi_mod + self.rf.dphi_rf[0]))
+
+            self.I_FF_CORR[:self.n_coarse_FF] = self.I_FF_CORR[-self.n_coarse_FF:]
+            for ind in range(self.n_coarse_FF, 2 * self.n_coarse_FF):
                 for k in range(self.n_FF):
                     self.I_FF_CORR[ind] += self.coeff_FF[k] \
-                                      * self.I_BEAM_COARSE_FF[ind-k]
+                                      * self.I_BEAM_COARSE_FF_MOD[ind-k]
 
-            self.V_FF_CORR = self.G_ff \
-                            * self.matr_conv(self.I_BEAM_COARSE_FF, self.TWC.h_gen[::5])
+            # Do a down-modulation to the resonant frequency of the TWC
+            self.I_FF_CORR_MOD[:self.n_coarse_FF] = self.I_FF_CORR_MOD[-self.n_coarse_FF:]
+            self.I_FF_CORR_MOD[-self.n_coarse_FF:] = modulator(self.I_FF_CORR[-self.n_coarse_FF:],
+                                                           omega_i=self.omega_r, omega_f=self.omega_c,
+                                                           T_sampling=5 * self.T_s,
+                                                           phi_0=-(self.dphi_mod + self.rf.dphi_rf[0]))
+
+            # Find voltage from convolution with generator response
+            self.V_FF_CORR[:self.n_coarse_FF] = self.V_FF_CORR[-self.n_coarse_FF:]
+            self.V_FF_CORR[-self.n_coarse_FF:] = self.G_ff \
+                            * self.matr_conv(self.I_FF_CORR_MOD, self.TWC.h_gen[::5])[-self.n_coarse_FF:] * 5 * self.T_s
 
             # Compensate for FIR filter delay
-            self.DV_FF = np.concatenate((self.V_FF_CORR[self.n_FF_delay:],
-                                        np.zeros(self.n_FF_delay, dtype=complex)))
+            self.DV_FF[:self.n_coarse_FF] = self.DV_FF[-self.n_coarse_FF:]
+            self.DV_FF[-self.n_coarse_FF:] = self.V_FF_CORR[self.n_coarse_FF - self.n_FF_delay: - self.n_FF_delay]
 
             # Interpolate to finer grids
-            self.V_FF_CORR_COARSE = np.interp(self.rf_centers, self.rf_centers[::5], self.DV_FF)
-            self.V_FF_CORR_FINE = np.interp(self.profile.bin_centers, self.rf_centers[::5], self.DV_FF)
-
-            # Add to beam-induced voltage (opposite sign)
-            self.V_IND_COARSE_BEAM[-self.n_coarse:] += self.n_cavities * self.V_FF_CORR_COARSE
-            self.V_IND_FINE_BEAM[-self.profile.n_slices:] += self.n_cavities * self.V_FF_CORR_FINE
-
-            # Update vector from previous turn
-            self.I_BEAM_COARSE_FF = np.copy(self.I_COARSE_BEAM[-self.n_coarse::5])
+            self.V_FF_CORR_COARSE = np.interp(self.rf_centers, self.rf_centers[::5], self.DV_FF[-self.n_coarse_FF:])
+            self.V_FF_CORR_FINE = np.interp(self.profile.bin_centers, self.rf_centers[::5], self.DV_FF[-self.n_coarse_FF:])
 
 
     # INDIVIDUAL COMPONENTS ---------------------------------------------------
@@ -629,7 +722,7 @@ class SPSOneTurnFeedback(object):
         self.DV_MOD_FR[-self.n_coarse:] = modulator(self.DV_DELAYED[-self.n_coarse:],
                                                     self.omega_c, self.omega_r,
                                                     self.rf.t_rf[0, self.counter],
-                                                    phi_0= self.dphi_mod + self.rf.dphi_rf[0])
+                                                    phi_0= (self.dphi_mod + self.rf.dphi_rf[0]))
 
 
     def mov_avg(self):
@@ -652,14 +745,14 @@ class SPSOneTurnFeedback(object):
 
         self.I_GEN[:self.n_coarse] = self.I_GEN[-self.n_coarse:]
         self.I_GEN[-self.n_coarse:] = self.DV_MOD_FRF[-self.n_coarse:] + self.open_drive * self.V_SET[-self.n_coarse:]
-        self.I_GEN[-self.n_coarse:] *= self.G_tx * self.T_s / self.TWC.R_gen
+        self.I_GEN[-self.n_coarse:] *= self.G_tx / self.TWC.R_gen
 
 
     def gen_response(self):
 
         self.V_IND_COARSE_GEN[:self.n_coarse] = self.V_IND_COARSE_GEN[-self.n_coarse:]
         self.V_IND_COARSE_GEN[-self.n_coarse:] = self.n_cavities * self.matr_conv(self.I_GEN,
-                                                                                  self.TWC.h_gen)[-self.n_coarse:]
+                                                 self.TWC.h_gen)[-self.n_coarse:] * self.T_s
 
 
     # BEAM MODEL
@@ -669,14 +762,14 @@ class SPSOneTurnFeedback(object):
         if coarse:
             self.V_IND_COARSE_BEAM[:self.n_coarse] = self.V_IND_COARSE_BEAM[-self.n_coarse:]
             self.V_IND_COARSE_BEAM[-self.n_coarse:] = self.n_cavities * self.matr_conv(self.I_COARSE_BEAM,
-                                                                            self.TWC.h_beam_coarse)[-self.n_coarse:]
+                                                        self.TWC.h_beam_coarse)[-self.n_coarse:] * self.T_s
         else:
             self.V_IND_FINE_BEAM[:self.profile.n_slices] = self.V_IND_FINE_BEAM[-self.profile.n_slices:]
             # Only convolve the slices for the current turn because the fine grid points can be less
             # than one turn in length
             self.V_IND_FINE_BEAM[-self.profile.n_slices:] = self.n_cavities \
                                                             * self.matr_conv(self.I_FINE_BEAM[-self.profile.n_slices:],
-                                                                            self.TWC.h_beam)[-self.profile.n_slices:]
+                                                            self.TWC.h_beam)[-self.profile.n_slices:] * self.profile.bin_size
 
 
     def matr_conv(self, I, h):
@@ -723,7 +816,7 @@ class SPSOneTurnFeedback(object):
 
     # Power related functions
     def calc_power(self):
-        self.II_COARSE_GEN = np.copy(self.I_GEN) / self.T_s
+        self.II_COARSE_GEN = np.copy(self.I_GEN)
         self.P_GEN = get_power_gen_I2(self.II_COARSE_GEN, 50)
 
     def wo_clamping(self):
