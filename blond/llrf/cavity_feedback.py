@@ -121,9 +121,6 @@ class SPSCavityFeedback(object):
 
     Attributes
     ----------
-    G_tx : float or list
-        Transmitter gain [1] of the cavity feedback; convention same as G_llrf;
-        fine-tuned via benchmark in open_feedback mode
     OTFB_1 : class
         An SPSOneTurnFeedback type class; 3/4-section cavity for post/pre-LS2
     OTFB_2 : class
@@ -194,7 +191,7 @@ class SPSCavityFeedback(object):
                                              n_cavities=4, V_part=V_part,
                                              G_ff=float(G_ff_1),
                                              G_llrf=float(G_llrf_1),
-                                             G_tx=0.99468245,
+                                             G_tx=float(G_tx_1),
                                              a_comb=float(a_comb),
                                              df=float(df_1),
                                              Commissioning=self.Commissioning)
@@ -202,7 +199,7 @@ class SPSCavityFeedback(object):
                                              n_cavities=2, V_part=1-V_part,
                                              G_ff=float(G_ff_2),
                                              G_llrf=float(G_llrf_2),
-                                             G_tx = 1.002453405,
+                                             G_tx=float(G_tx_2),
                                              a_comb=float(a_comb),
                                              df=float(df_2),
                                              Commissioning=self.Commissioning)
@@ -216,7 +213,7 @@ class SPSCavityFeedback(object):
                                              n_cavities=2, V_part=V_part,
                                              G_ff=float(G_ff_1),
                                              G_llrf=float(G_llrf_1),
-                                             G_tx=1.002453405,
+                                             G_tx=float(G_tx_1),
                                              a_comb=float(a_comb),
                                              df=float(df_1),
                                              Commissioning=self.Commissioning)
@@ -224,7 +221,7 @@ class SPSCavityFeedback(object):
                                              n_cavities=2, V_part=1-V_part,
                                              G_ff=float(G_ff_2),
                                              G_llrf=float(G_llrf_2),
-                                             G_tx=1.00066011,
+                                             G_tx=float(G_tx_2),
                                              a_comb=float(a_comb),
                                              df=float(df_2),
                                              Commissioning=self.Commissioning)
@@ -654,7 +651,7 @@ class SPSOneTurnFeedback(object):
 
             # Find voltage from convolution with generator response
             self.V_FF_CORR[:self.n_coarse_FF] = self.V_FF_CORR[-self.n_coarse_FF:]
-            self.V_FF_CORR[-self.n_coarse_FF:] = self.G_ff \
+            self.V_FF_CORR[-self.n_coarse_FF:] = self.G_ff * self.n_cavities \
                             * self.matr_conv(self.I_FF_CORR_MOD, self.TWC.h_gen[::5])[-self.n_coarse_FF:] * 5 * self.T_s
 
             # Compensate for FIR filter delay
