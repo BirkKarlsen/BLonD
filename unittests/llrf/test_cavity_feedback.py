@@ -208,9 +208,9 @@ class TestSPSCavityFeedback(unittest.TestCase):
                            OTFB_tracker_total_voltage)
 
 
-        max_ration_exp = 1.0690779399245092 #1.0055233047525063
+        max_ratio_exp = 1.0690779399245092 #1.0055233047525063
 
-        self.assertAlmostEqual(max_ratio, max_ration_exp, places=digit_round,
+        self.assertAlmostEqual(max_ratio, max_ratio_exp, places=digit_round,
                                msg='In TestCavityFeedback test_beam_loading: '
                                + 'total voltages differ')
 

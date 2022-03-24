@@ -650,7 +650,7 @@ class SPSOneTurnFeedback(object):
 
             # Find voltage from convolution with generator response
             self.V_FF_CORR[:self.n_coarse_FF] = self.V_FF_CORR[-self.n_coarse_FF:]
-            self.V_FF_CORR[-self.n_coarse_FF:] = self.G_ff \
+            self.V_FF_CORR[-self.n_coarse_FF:] = self.G_ff * self.n_cavities \
                             * self.matr_conv(self.I_FF_CORR_MOD, self.TWC.h_gen[::5])[-self.n_coarse_FF:] * 5 * self.T_s
 
             # Compensate for FIR filter delay
