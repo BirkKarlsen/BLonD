@@ -637,6 +637,7 @@ class SPSOneTurnFeedback(object):
                                                                   phi_0=(self.dphi_mod + self.rf.dphi_rf[0]))
 
             self.I_FF_CORR[:self.n_coarse_FF] = self.I_FF_CORR[-self.n_coarse_FF:]
+            self.I_FF_CORR[-self.n_coarse_FF:] = np.zeros(self.n_coarse_FF)
             for ind in range(self.n_coarse_FF, 2 * self.n_coarse_FF):
                 for k in range(self.n_FF):
                     self.I_FF_CORR[ind] += self.coeff_FF[k] \
@@ -646,7 +647,7 @@ class SPSOneTurnFeedback(object):
             self.I_FF_CORR_MOD[:self.n_coarse_FF] = self.I_FF_CORR_MOD[-self.n_coarse_FF:]
             self.I_FF_CORR_MOD[-self.n_coarse_FF:] = modulator(self.I_FF_CORR[-self.n_coarse_FF:],
                                                            omega_i=self.omega_r, omega_f=self.omega_c,
-                                                           T_sampling=5 * self.T_s,
+                                                           T_sampling= 5 * self.T_s,
                                                            phi_0=-(self.dphi_mod + self.rf.dphi_rf[0]))
 
             # Find voltage from convolution with generator response
@@ -656,7 +657,9 @@ class SPSOneTurnFeedback(object):
 
             # Compensate for FIR filter delay
             self.DV_FF[:self.n_coarse_FF] = self.DV_FF[-self.n_coarse_FF:]
-            self.DV_FF[-self.n_coarse_FF:] = self.V_FF_CORR[self.n_coarse_FF - self.n_FF_delay: - self.n_FF_delay]
+            #self.DV_FF[-self.n_coarse_FF:] = np.concatenate((self.V_FF_CORR[self.n_FF_delay - self.n_coarse_FF:],
+            #                                                 np.zeros(self.n_FF_delay, dtype=complex)))
+            self.DV_FF[-self.n_coarse_FF:] = self.V_FF_CORR[self.n_FF_delay:self.n_FF_delay - self.n_coarse_FF]
 
             # Interpolate to finer grids
             self.V_FF_CORR_COARSE = np.interp(self.rf_centers, self.rf_centers[::5], self.DV_FF[-self.n_coarse_FF:])
