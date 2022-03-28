@@ -26,8 +26,9 @@ from blond.llrf.signal_processing import comb_filter, cartesian_to_polar,\
     rf_beam_current, moving_average_improved, fir_filter_lhc_otfb_coeff
 from blond.llrf.impulse_response import SPS3Section200MHzTWC, \
     SPS4Section200MHzTWC, SPS5Section200MHzTWC
-from blond.llrf.signal_processing import feedforward_filter_TWC3, \
-    feedforward_filter_TWC4, feedforward_filter_TWC5
+from blond.llrf.signal_processing import feedforward_filter_TWC3_1, feedforward_filter_TWC3_2, \
+    feedforward_filter_TWC3_3, feedforward_filter_TWC4_1, feedforward_filter_TWC4_2, \
+    feedforward_filter_TWC4_3, feedforward_filter_TWC5
 from blond.utils import bmath as bm
 
 
@@ -40,7 +41,8 @@ class CavityFeedbackCommissioning(object):
 
     def __init__(self, debug=False, open_loop=False, open_FB=False,
                  open_drive=False, open_FF=False, V_SET=None,
-                 cpp_conv=False, pwr_clamp=False, rot_IQ=1):
+                 cpp_conv=False, pwr_clamp=False, rot_IQ=1,
+                 FIR_filter=1):
         """Class containing commissioning settings for the cavity feedback
 
         Parameters
@@ -75,6 +77,7 @@ class CavityFeedbackCommissioning(object):
         self.cpp_conv = cpp_conv
         self.pwr_clamp = pwr_clamp
         self.rot_IQ = rot_IQ
+        self.FIR_filter = FIR_filter
 
 
 class SPSCavityFeedback(object):
@@ -416,7 +419,8 @@ class SPSOneTurnFeedback(object):
             if self.open_FF == 1:
                 # Feed-forward filter
                 self.coeff_FF = getattr(sys.modules[__name__],
-                                "feedforward_filter_TWC" + str(n_sections))
+                                "feedforward_filter_TWC" + str(n_sections)
+                                        + "_" + str(Commissioning.FIR_filter))
                 self.n_FF = len(self.coeff_FF)          # Number of coefficients for FF
                 self.n_FF_delay = int(0.5 * (self.n_FF - 1) +
                                       0.5 * self.TWC.tau/self.rf.t_rf[0,0]/5)
@@ -511,9 +515,9 @@ class SPSOneTurnFeedback(object):
             self.I_BEAM_COARSE_FF = np.zeros(2 * self.n_coarse_FF, dtype=complex)
             self.I_BEAM_COARSE_FF_MOD = np.zeros(2 * self.n_coarse_FF, dtype=complex)
             self.I_FF_CORR_MOD = np.zeros(2 * self.n_coarse_FF, dtype=complex)
+            self.I_FF_CORR_DEL = np.zeros(2 * self.n_coarse_FF, dtype=complex)
             self.I_FF_CORR = np.zeros(2 * self.n_coarse_FF, dtype=complex)
             self.V_FF_CORR = np.zeros(2 * self.n_coarse_FF, dtype=complex)
-            self.DV_FF = np.zeros(2 * self.n_coarse_FF, dtype=complex)
 
         self.logger.info("Class initialized")
 
@@ -537,6 +541,10 @@ class SPSOneTurnFeedback(object):
         # Beam-induced voltage from beam profile
         self.beam_model(lpf=False)
 
+        # Feed-forward corrections
+        if self.open_FF == 1:
+            self.V_IND_COARSE_GEN[-self.n_coarse:] = self.V_FF_CORR_COARSE + self.V_IND_COARSE_GEN[-self.n_coarse:]
+
         # Sum generator- and beam-induced voltages for coarse grid
         self.V_ANT_START = np.copy(self.V_ANT)
         self.V_ANT[:self.n_coarse] = self.V_ANT[-self.n_coarse:]
@@ -550,10 +558,6 @@ class SPSOneTurnFeedback(object):
                                                    + np.interp(self.profile.bin_centers, self.rf_centers,
                                                                self.V_IND_COARSE_GEN[-self.n_coarse:])
 
-        # Feed-forward corrections
-        if self.open_FF == 1:
-            self.V_ANT[-self.n_coarse:] = self.V_FF_CORR_COARSE + self.V_ANT[-self.n_coarse:]
-            self.V_ANT_FINE[-self.profile.n_slices:] = self.V_FF_CORR_FINE + self.V_ANT_FINE[-self.profile.n_slices:]
 
     def track_no_beam(self):
 
@@ -650,20 +654,17 @@ class SPSOneTurnFeedback(object):
                                                            T_sampling= 5 * self.T_s,
                                                            phi_0=-(self.dphi_mod + self.rf.dphi_rf[0]))
 
+            # Compensate for FIR filter delay
+            self.I_FF_CORR_DEL[:self.n_coarse_FF] = self.I_FF_CORR_DEL[-self.n_coarse_FF:]
+            self.I_FF_CORR_DEL[-self.n_coarse_FF:] = self.I_FF_CORR_MOD[self.n_FF_delay:self.n_FF_delay - self.n_coarse_FF]
+
             # Find voltage from convolution with generator response
             self.V_FF_CORR[:self.n_coarse_FF] = self.V_FF_CORR[-self.n_coarse_FF:]
             self.V_FF_CORR[-self.n_coarse_FF:] = self.G_ff * self.n_cavities \
-                            * self.matr_conv(self.I_FF_CORR_MOD, self.TWC.h_gen[::5])[-self.n_coarse_FF:] * 5 * self.T_s
-
-            # Compensate for FIR filter delay
-            self.DV_FF[:self.n_coarse_FF] = self.DV_FF[-self.n_coarse_FF:]
-            #self.DV_FF[-self.n_coarse_FF:] = np.concatenate((self.V_FF_CORR[self.n_FF_delay - self.n_coarse_FF:],
-            #                                                 np.zeros(self.n_FF_delay, dtype=complex)))
-            self.DV_FF[-self.n_coarse_FF:] = self.V_FF_CORR[self.n_FF_delay:self.n_FF_delay - self.n_coarse_FF]
+                            * self.matr_conv(self.I_FF_CORR_DEL, self.TWC.h_gen[::5])[-self.n_coarse_FF:] * 5 * self.T_s
 
             # Interpolate to finer grids
-            self.V_FF_CORR_COARSE = np.interp(self.rf_centers, self.rf_centers[::5], self.DV_FF[-self.n_coarse_FF:])
-            self.V_FF_CORR_FINE = np.interp(self.profile.bin_centers, self.rf_centers[::5], self.DV_FF[-self.n_coarse_FF:])
+            self.V_FF_CORR_COARSE = np.interp(self.rf_centers, self.rf_centers[::5], self.V_FF_CORR[-self.n_coarse_FF:])
 
 
     # INDIVIDUAL COMPONENTS ---------------------------------------------------
@@ -679,7 +680,7 @@ class SPSOneTurnFeedback(object):
 
         # Convert to array
         self.V_SET[:self.n_coarse] = self.V_SET[-self.n_coarse:]
-        self.V_SET[-self.n_coarse:] = self.V_set * np.ones(self.n_coarse) # * self.rot_IQ
+        self.V_SET[-self.n_coarse:] = self.V_set * np.ones(self.n_coarse)
 
 
     def set_point_mod(self):
@@ -821,7 +822,11 @@ class SPSOneTurnFeedback(object):
 
     # Power related functions
     def calc_power(self):
-        self.II_COARSE_GEN = np.copy(self.I_GEN)
+        self.II_COARSE_GEN = np.copy(self.I_GEN[-self.n_coarse:])
+        if self.open_FF == 1:
+            self.II_COARSE_GEN = self.II_COARSE_GEN + np.interp(self.rf_centers,
+                                                                self.rf_centers[::5],
+                                                                self.I_FF_CORR_DEL[-self.n_coarse_FF:])
         self.P_GEN = get_power_gen_I2(self.II_COARSE_GEN, 50)
 
     def wo_clamping(self):
