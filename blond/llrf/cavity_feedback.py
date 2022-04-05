@@ -42,7 +42,7 @@ class CavityFeedbackCommissioning(object):
     def __init__(self, debug=False, open_loop=False, open_FB=False,
                  open_drive=False, open_FF=False, V_SET=None,
                  cpp_conv=False, pwr_clamp=False, rot_IQ=1,
-                 FIR_filter=1):
+                 FIR_filter=1, excitation=False):
         """Class containing commissioning settings for the cavity feedback
 
         Parameters
@@ -78,6 +78,7 @@ class CavityFeedbackCommissioning(object):
         self.pwr_clamp = pwr_clamp
         self.rot_IQ = rot_IQ
         self.FIR_filter = FIR_filter
+        self.excitation = int(excitation)
 
 
 class SPSCavityFeedback(object):
@@ -393,6 +394,7 @@ class SPSOneTurnFeedback(object):
 
         self.cpp_conv = Commissioning.cpp_conv
         self.rot_IQ = Commissioning.rot_IQ
+        self.excitation = Commissioning.excitation
 
         # Read input
         self.rf = RFStation
@@ -468,6 +470,8 @@ class SPSOneTurnFeedback(object):
         self.DV_GEN = np.zeros(2 * self.n_coarse, dtype=complex)
         self.logger.debug("Length of arrays on coarse grid 2x %d", self.n_coarse)
 
+        self.NOISE = np.zeros(2 * self.n_coarse, dtype=complex)
+
         # LLRF MODEL ARRAYS
         # Initialize comb filter
         self.DV_COMB_OUT = np.zeros(2 * self.n_coarse, dtype=complex)
@@ -480,7 +484,7 @@ class SPSOneTurnFeedback(object):
         self.DV_MOD_FR = np.zeros(2 * self.n_coarse, dtype=complex)
 
         # Initialize moving average
-        self.n_mov_av = int(self.TWC.tau/self.rf.t_rf[0, 0])
+        self.n_mov_av = int(round(self.TWC.tau/self.rf.t_rf[0, 0]))
         self.DV_MOV_AVG = np.zeros(2 * self.n_coarse, dtype=complex)
         self.logger.debug("Moving average over %d points", self.n_mov_av)
         if self.n_mov_av < 2:
@@ -540,10 +544,6 @@ class SPSOneTurnFeedback(object):
 
         # Beam-induced voltage from beam profile
         self.beam_model(lpf=False)
-
-        # Feed-forward corrections
-        if self.open_FF == 1:
-            self.V_IND_COARSE_GEN[-self.n_coarse:] = self.V_FF_CORR_COARSE + self.V_IND_COARSE_GEN[-self.n_coarse:]
 
         # Sum generator- and beam-induced voltages for coarse grid
         self.V_ANT_START = np.copy(self.V_ANT)
@@ -658,15 +658,6 @@ class SPSOneTurnFeedback(object):
             self.I_FF_CORR_DEL[:self.n_coarse_FF] = self.I_FF_CORR_DEL[-self.n_coarse_FF:]
             self.I_FF_CORR_DEL[-self.n_coarse_FF:] = self.I_FF_CORR_MOD[self.n_FF_delay:self.n_FF_delay - self.n_coarse_FF]
 
-            # Find voltage from convolution with generator response
-            self.V_FF_CORR[:self.n_coarse_FF] = self.V_FF_CORR[-self.n_coarse_FF:]
-            self.V_FF_CORR[-self.n_coarse_FF:] = self.G_ff * self.n_cavities \
-                            * self.matr_conv(self.I_FF_CORR_DEL, self.TWC.h_gen[::5])[-self.n_coarse_FF:] * 5 * self.T_s
-
-            # Interpolate to finer grids
-            self.V_FF_CORR_COARSE = np.interp(self.rf_centers, self.rf_centers[::5], self.V_FF_CORR[-self.n_coarse_FF:])
-
-
     # INDIVIDUAL COMPONENTS ---------------------------------------------------
 
     # LLRF MODEL
@@ -693,7 +684,8 @@ class SPSOneTurnFeedback(object):
 
         self.DV_GEN[:self.n_coarse] = self.DV_GEN[-self.n_coarse:]
         self.DV_GEN[-self.n_coarse:] = self.G_llrf * (self.V_SET[-self.n_coarse:] -
-                                                      self.open_loop * self.V_ANT[-self.n_coarse:])
+                                                      self.open_loop * self.V_ANT[-self.n_coarse:] +
+                                                      self.excitation * self.NOISE[-self.n_coarse:])
         self.logger.debug("In %s, average set point voltage %.6f MV",
                           sys._getframe(0).f_code.co_name,
                           1e-6 * np.mean(np.absolute(self.V_SET)))
@@ -706,13 +698,13 @@ class SPSOneTurnFeedback(object):
 
 
     def comb(self):
-
         # Shuffle present data to previous data
         self.DV_COMB_OUT[:self.n_coarse] = self.DV_COMB_OUT[-self.n_coarse:]
         # Update present data
         self.DV_COMB_OUT[-self.n_coarse:] = comb_filter(self.DV_COMB_OUT[:self.n_coarse],
                                                         self.DV_GEN[-self.n_coarse:],
                                                         self.a_comb)
+
 
 
     def one_turn_delay(self):
@@ -743,7 +735,8 @@ class SPSOneTurnFeedback(object):
         self.DV_MOD_FRF[-self.n_coarse:] = self.open_FB * modulator(self.DV_MOV_AVG[-self.n_coarse:],
                                                                     self.omega_r, self.omega_c,
                                                                     self.rf.t_rf[0, self.counter],
-                                                                    phi_0=-(self.dphi_mod + self.rf.dphi_rf[0]))
+                                                                    phi_0=-(self.dphi_mod + self.rf.dphi_rf[0]
+                                                            - (self.omega_r - self.omega_c) * self.n_mov_av * self.T_s))
 
 
     def sum_and_gain(self):
@@ -751,6 +744,10 @@ class SPSOneTurnFeedback(object):
         self.I_GEN[:self.n_coarse] = self.I_GEN[-self.n_coarse:]
         self.I_GEN[-self.n_coarse:] = self.DV_MOD_FRF[-self.n_coarse:] + self.open_drive * self.V_SET[-self.n_coarse:]
         self.I_GEN[-self.n_coarse:] *= self.G_tx / self.TWC.R_gen
+        if self.open_FF == 1:
+            self.I_GEN[-self.n_coarse:] = self.I_GEN[-self.n_coarse:] + \
+                                         self.G_ff * 5 * np.interp(self.rf_centers, self.rf_centers[::5],
+                                                      self.I_FF_CORR_DEL[-self.n_coarse_FF:])
 
 
     def gen_response(self):
@@ -822,11 +819,7 @@ class SPSOneTurnFeedback(object):
 
     # Power related functions
     def calc_power(self):
-        self.II_COARSE_GEN = np.copy(self.I_GEN[-self.n_coarse:])
-        if self.open_FF == 1:
-            self.II_COARSE_GEN = self.II_COARSE_GEN + np.interp(self.rf_centers,
-                                                                self.rf_centers[::5],
-                                                                self.I_FF_CORR_DEL[-self.n_coarse_FF:])
+        self.II_COARSE_GEN = np.copy(self.I_GEN)
         self.P_GEN = get_power_gen_I2(self.II_COARSE_GEN, 50)
 
     def wo_clamping(self):
