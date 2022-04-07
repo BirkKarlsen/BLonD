@@ -39,7 +39,8 @@ class CavityFeedbackCommissioning(object):
 
     def __init__(self, debug=False, open_loop=False, open_FB=False,
                  open_drive=False, open_FF=False, V_SET=None,
-                 cpp_conv=False, pwr_clamp=False, rot_IQ=1):
+                 cpp_conv=False, pwr_clamp=False, rot_IQ=1,
+                 FIR_filter=1, excitation=False):
         """Class containing commissioning settings for the cavity feedback
 
         Parameters
@@ -74,6 +75,8 @@ class CavityFeedbackCommissioning(object):
         self.cpp_conv = cpp_conv
         self.pwr_clamp = pwr_clamp
         self.rot_IQ = rot_IQ
+        self.FIR_filter = FIR_filter
+        self.excitation = int(excitation)
 
 
 class SPSCavityFeedback(object):
@@ -389,6 +392,7 @@ class SPSOneTurnFeedback(object):
 
         self.cpp_conv = Commissioning.cpp_conv
         self.rot_IQ = Commissioning.rot_IQ
+        self.excitation = Commissioning.excitation
 
         # Read input
         self.rf = RFStation
@@ -409,11 +413,11 @@ class SPSOneTurnFeedback(object):
         self.G_llrf = float(G_llrf)
         self.G_tx = float(G_tx) / (self.n_cavities)
 
-        # 200 Hz travelling wave cavity (TWC) model
+        # 200 MHz travelling wave cavity (TWC) model
         if n_sections in [3, 4, 5]:
             self.TWC = eval("SPS" + str(n_sections) + "Section200MHzTWC(" + str(df) + ")")
             if self.open_FF == 1:
-                # Feed-forward fitler
+                # Feed-forward filter
                 self.coeff_FF = getattr(sys.modules[__name__],
                                 "feedforward_filter_TWC" + str(n_sections))
                 self.n_FF = len(self.coeff_FF)          # Number of coefficients for FF
@@ -463,6 +467,8 @@ class SPSOneTurnFeedback(object):
         self.DV_GEN = np.zeros(2 * self.n_coarse, dtype=complex)
         self.logger.debug("Length of arrays on coarse grid 2x %d", self.n_coarse)
 
+        self.NOISE = np.zeros(2 * self.n_coarse, dtype=complex)
+
         # LLRF MODEL ARRAYS
         # Initialize comb filter
         self.DV_COMB_OUT = np.zeros(2 * self.n_coarse, dtype=complex)
@@ -475,7 +481,7 @@ class SPSOneTurnFeedback(object):
         self.DV_MOD_FR = np.zeros(2 * self.n_coarse, dtype=complex)
 
         # Initialize moving average
-        self.n_mov_av = int(self.TWC.tau/self.rf.t_rf[0, 0])
+        self.n_mov_av = int(round(self.TWC.tau/self.rf.t_rf[0, 0]))
         self.DV_MOV_AVG = np.zeros(2 * self.n_coarse, dtype=complex)
         self.logger.debug("Moving average over %d points", self.n_mov_av)
         if self.n_mov_av < 2:
@@ -510,9 +516,9 @@ class SPSOneTurnFeedback(object):
             self.I_BEAM_COARSE_FF = np.zeros(2 * self.n_coarse_FF, dtype=complex)
             self.I_BEAM_COARSE_FF_MOD = np.zeros(2 * self.n_coarse_FF, dtype=complex)
             self.I_FF_CORR_MOD = np.zeros(2 * self.n_coarse_FF, dtype=complex)
+            self.I_FF_CORR_DEL = np.zeros(2 * self.n_coarse_FF, dtype=complex)
             self.I_FF_CORR = np.zeros(2 * self.n_coarse_FF, dtype=complex)
             self.V_FF_CORR = np.zeros(2 * self.n_coarse_FF, dtype=complex)
-            self.DV_FF = np.zeros(2 * self.n_coarse_FF, dtype=complex)
 
         self.logger.info("Class initialized")
 
@@ -549,10 +555,6 @@ class SPSOneTurnFeedback(object):
                                                    + np.interp(self.profile.bin_centers, self.rf_centers,
                                                                self.V_IND_COARSE_GEN[-self.n_coarse:])
 
-        # Feed-forward corrections
-        if self.open_FF == 1:
-            self.V_ANT[-self.n_coarse:] = self.V_FF_CORR_COARSE + self.V_ANT[-self.n_coarse:]
-            self.V_ANT_FINE[-self.profile.n_slices:] = self.V_FF_CORR_FINE + self.V_ANT_FINE[-self.profile.n_slices:]
 
     def track_no_beam(self):
 
@@ -625,8 +627,8 @@ class SPSOneTurnFeedback(object):
             # Resample RF beam current to FF sampling frequency
             self.I_BEAM_COARSE_FF[:self.n_coarse_FF] = self.I_BEAM_COARSE_FF[-self.n_coarse_FF:]
             I_COARSE_BEAM_RESHAPED = np.copy(self.I_COARSE_BEAM[-self.n_coarse:])
-            I_COARSE_BEAM_RESHAPED = I_COARSE_BEAM_RESHAPED.reshape((self.n_coarse//self.n_coarse_FF, self.n_coarse_FF))
-            self.I_BEAM_COARSE_FF[-self.n_coarse_FF:] = np.sum(I_COARSE_BEAM_RESHAPED, axis=0) / 5
+            I_COARSE_BEAM_RESHAPED = I_COARSE_BEAM_RESHAPED.reshape((self.n_coarse_FF, self.n_coarse//self.n_coarse_FF))
+            self.I_BEAM_COARSE_FF[-self.n_coarse_FF:] = np.sum(I_COARSE_BEAM_RESHAPED, axis=1) / 5
 
             # Do a down-modulation to the resonant frequency of the TWC
             self.I_BEAM_COARSE_FF_MOD[:self.n_coarse_FF] = self.I_BEAM_COARSE_FF_MOD[-self.n_coarse_FF:]
@@ -636,6 +638,7 @@ class SPSOneTurnFeedback(object):
                                                                   phi_0=(self.dphi_mod + self.rf.dphi_rf[0]))
 
             self.I_FF_CORR[:self.n_coarse_FF] = self.I_FF_CORR[-self.n_coarse_FF:]
+            self.I_FF_CORR[-self.n_coarse_FF:] = np.zeros(self.n_coarse_FF)
             for ind in range(self.n_coarse_FF, 2 * self.n_coarse_FF):
                 for k in range(self.n_FF):
                     self.I_FF_CORR[ind] += self.coeff_FF[k] \
@@ -645,22 +648,12 @@ class SPSOneTurnFeedback(object):
             self.I_FF_CORR_MOD[:self.n_coarse_FF] = self.I_FF_CORR_MOD[-self.n_coarse_FF:]
             self.I_FF_CORR_MOD[-self.n_coarse_FF:] = modulator(self.I_FF_CORR[-self.n_coarse_FF:],
                                                            omega_i=self.omega_r, omega_f=self.omega_c,
-                                                           T_sampling=5 * self.T_s,
+                                                           T_sampling= 5 * self.T_s,
                                                            phi_0=-(self.dphi_mod + self.rf.dphi_rf[0]))
 
-            # Find voltage from convolution with generator response
-            self.V_FF_CORR[:self.n_coarse_FF] = self.V_FF_CORR[-self.n_coarse_FF:]
-            self.V_FF_CORR[-self.n_coarse_FF:] = self.G_ff \
-                            * self.matr_conv(self.I_FF_CORR_MOD, self.TWC.h_gen[::5])[-self.n_coarse_FF:] * 5 * self.T_s
-
             # Compensate for FIR filter delay
-            self.DV_FF[:self.n_coarse_FF] = self.DV_FF[-self.n_coarse_FF:]
-            self.DV_FF[-self.n_coarse_FF:] = self.V_FF_CORR[self.n_coarse_FF - self.n_FF_delay: - self.n_FF_delay]
-
-            # Interpolate to finer grids
-            self.V_FF_CORR_COARSE = np.interp(self.rf_centers, self.rf_centers[::5], self.DV_FF[-self.n_coarse_FF:])
-            self.V_FF_CORR_FINE = np.interp(self.profile.bin_centers, self.rf_centers[::5], self.DV_FF[-self.n_coarse_FF:])
-
+            self.I_FF_CORR_DEL[:self.n_coarse_FF] = self.I_FF_CORR_DEL[-self.n_coarse_FF:]
+            self.I_FF_CORR_DEL[-self.n_coarse_FF:] = self.I_FF_CORR_MOD[self.n_FF_delay:self.n_FF_delay - self.n_coarse_FF]
 
     # INDIVIDUAL COMPONENTS ---------------------------------------------------
 
@@ -675,7 +668,7 @@ class SPSOneTurnFeedback(object):
 
         # Convert to array
         self.V_SET[:self.n_coarse] = self.V_SET[-self.n_coarse:]
-        self.V_SET[-self.n_coarse:] = self.V_set * np.ones(self.n_coarse) # * self.rot_IQ
+        self.V_SET[-self.n_coarse:] = self.V_set * np.ones(self.n_coarse)
 
 
     def set_point_mod(self):
@@ -688,7 +681,8 @@ class SPSOneTurnFeedback(object):
 
         self.DV_GEN[:self.n_coarse] = self.DV_GEN[-self.n_coarse:]
         self.DV_GEN[-self.n_coarse:] = self.G_llrf * (self.V_SET[-self.n_coarse:] -
-                                                      self.open_loop * self.V_ANT[-self.n_coarse:])
+                                                      self.open_loop * self.V_ANT[-self.n_coarse:] +
+                                                      self.excitation * self.NOISE[-self.n_coarse:])
         self.logger.debug("In %s, average set point voltage %.6f MV",
                           sys._getframe(0).f_code.co_name,
                           1e-6 * np.mean(np.absolute(self.V_SET)))
@@ -701,13 +695,13 @@ class SPSOneTurnFeedback(object):
 
 
     def comb(self):
-
         # Shuffle present data to previous data
         self.DV_COMB_OUT[:self.n_coarse] = self.DV_COMB_OUT[-self.n_coarse:]
         # Update present data
         self.DV_COMB_OUT[-self.n_coarse:] = comb_filter(self.DV_COMB_OUT[:self.n_coarse],
                                                         self.DV_GEN[-self.n_coarse:],
                                                         self.a_comb)
+
 
 
     def one_turn_delay(self):
@@ -738,7 +732,8 @@ class SPSOneTurnFeedback(object):
         self.DV_MOD_FRF[-self.n_coarse:] = self.open_FB * modulator(self.DV_MOV_AVG[-self.n_coarse:],
                                                                     self.omega_r, self.omega_c,
                                                                     self.rf.t_rf[0, self.counter],
-                                                                    phi_0=-(self.dphi_mod + self.rf.dphi_rf[0]))
+                                                                    phi_0=-(self.dphi_mod + self.rf.dphi_rf[0] +
+                                            (self.omega_r - self.omega_c) * (self.n_mov_av - 1) * self.T_s))
 
 
     def sum_and_gain(self):
@@ -746,6 +741,10 @@ class SPSOneTurnFeedback(object):
         self.I_GEN[:self.n_coarse] = self.I_GEN[-self.n_coarse:]
         self.I_GEN[-self.n_coarse:] = self.DV_MOD_FRF[-self.n_coarse:] + self.open_drive * self.V_SET[-self.n_coarse:]
         self.I_GEN[-self.n_coarse:] *= self.G_tx / self.TWC.R_gen
+        if self.open_FF == 1:
+            self.I_GEN[-self.n_coarse:] = self.I_GEN[-self.n_coarse:] + \
+                                         self.G_ff * 5 * np.interp(self.rf_centers, self.rf_centers[::5],
+                                                      self.I_FF_CORR_DEL[-self.n_coarse_FF:])
 
 
     def gen_response(self):
@@ -813,6 +812,7 @@ class SPSOneTurnFeedback(object):
         # Present delay time
         self.n_mov_av = int(self.TWC.tau / self.rf.t_rf[0, self.counter])
         self.n_delay = self.n_coarse - self.n_mov_av
+
 
     # Power related functions
     def calc_power(self):
