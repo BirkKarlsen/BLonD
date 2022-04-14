@@ -614,9 +614,9 @@ class SPSOneTurnFeedback(object):
                                 lpf=lpf, downsample={'Ts': self.T_s, 'points': self.n_coarse},
                                 external_reference=True)
 
-        self.I_FINE_BEAM[-self.profile.n_slices:] = -self.rot_IQ * self.I_FINE_BEAM[-self.profile.n_slices:] / \
+        self.I_FINE_BEAM[-self.profile.n_slices:] = self.rot_IQ * self.I_FINE_BEAM[-self.profile.n_slices:] / \
                                                     self.profile.bin_size
-        self.I_COARSE_BEAM[-self.n_coarse:] = -self.rot_IQ * self.I_COARSE_BEAM[-self.n_coarse:] / self.T_s
+        self.I_COARSE_BEAM[-self.n_coarse:] = self.rot_IQ * self.I_COARSE_BEAM[-self.n_coarse:] / self.T_s
 
         # Beam-induced voltage
         self.beam_response(coarse=False)
@@ -667,7 +667,7 @@ class SPSOneTurnFeedback(object):
         # Read RF voltage from rf object
         self.V_set = polar_to_cartesian(
             self.V_part * self.rf.voltage[0, self.counter],
-            0.5 * np.pi - self.rf.phi_rf[0, self.counter] + np.angle(self.rot_IQ))
+            -0.5 * np.pi + self.rf.phi_rf[0, self.counter] + np.angle(self.rot_IQ))
 
         # Convert to array
         self.V_SET[:self.n_coarse] = self.V_SET[-self.n_coarse:]
@@ -719,7 +719,7 @@ class SPSOneTurnFeedback(object):
         self.DV_MOD_FR[-self.n_coarse:] = modulator(self.DV_DELAYED[-self.n_coarse:],
                                                     self.omega_c, self.omega_r,
                                                     self.rf.t_rf[0, self.counter],
-                                                    phi_0= (self.dphi_mod + self.rf.dphi_rf[0]))
+                                                    phi_0=(self.dphi_mod + self.rf.dphi_rf[0]))
 
 
     def mov_avg(self):
