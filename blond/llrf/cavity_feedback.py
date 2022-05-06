@@ -527,6 +527,8 @@ class SPSOneTurnFeedback(object):
 
 
     def track(self):
+        r'''Tracking attribute of the SPSOneTurnFeedback. The different parts of the models are called
+        and the antenna voltage on the coarse- and fine-grid are computed.'''
 
         # Update turn-by-turn variables
         self.update_variables()
@@ -560,6 +562,8 @@ class SPSOneTurnFeedback(object):
 
 
     def track_no_beam(self):
+        r'''Tracking of the SPSOneTurnFeedback object without the Beam model. This is used initially to regulate the
+        antenna voltage towards the set point. This tracking methods is also refered to as pre-tracking.'''
 
         # Update variables
         self.update_variables()
@@ -589,6 +593,8 @@ class SPSOneTurnFeedback(object):
             np.mean(np.absolute(self.V_IND_COARSE_GEN[int(0.5 * self.n_coarse):])))
 
     def llrf_model(self):
+        r'''The LLRF model of the SPSOneTurnFeedback. This function calles the functions related
+        to the LLRF part of the model in the correct order.'''
 
         self.set_point()
         self.error_and_gain()
@@ -599,12 +605,16 @@ class SPSOneTurnFeedback(object):
 
 
     def gen_model(self):
+        r'''The Generator model of the SPSOneTurnFeedback. This function calles the functions related
+        to the generator part of the model in the correct order.'''
 
         self.mod_to_frf()
         self.sum_and_gain()
         self.gen_response()
 
     def beam_model(self, lpf=False):
+        r'''The Beam model of the SPSOneTurnFeedback. This function find the RF beam current from the Profile-
+        object, applies the cavity response towards the beam and the feed-forward correction if engaged.'''
 
         # Beam current from profile
         self.I_COARSE_BEAM[:self.n_coarse] = self.I_COARSE_BEAM[-self.n_coarse:]
@@ -662,6 +672,7 @@ class SPSOneTurnFeedback(object):
 
     # LLRF MODEL
     def set_point_std(self):
+        r'''Computes the desired set point voltage in I/Q.'''
 
         self.logger.debug("Entering %s function" %sys._getframe(0).f_code.co_name)
         # Read RF voltage from rf object
@@ -675,12 +686,16 @@ class SPSOneTurnFeedback(object):
 
 
     def set_point_mod(self):
+        r'''This function is called instead of set_point_std if a modulated set point is used.
+        That is, if the set point is non-constant over a turn with the periodicity of a turn.'''
 
         self.logger.debug("Entering %s function" %sys._getframe(0).f_code.co_name)
         pass
 
 
     def error_and_gain(self):
+        r'''This function computes the difference between the set point and the antenna voltage
+        and amplifies it with the LLRF gain.'''
 
         self.DV_GEN[:self.n_coarse] = self.DV_GEN[-self.n_coarse:]
         self.DV_GEN[-self.n_coarse:] = self.G_llrf * (self.V_SET[-self.n_coarse:] -
@@ -698,6 +713,8 @@ class SPSOneTurnFeedback(object):
 
 
     def comb(self):
+        r'''This function applies the comb filter to the error signal.'''
+
         # Shuffle present data to previous data
         self.DV_COMB_OUT[:self.n_coarse] = self.DV_COMB_OUT[-self.n_coarse:]
         # Update present data
@@ -708,12 +725,16 @@ class SPSOneTurnFeedback(object):
 
 
     def one_turn_delay(self):
+        r'''This function applies the complementary delay such that the correction is applied
+        with exactly the delay of one turn.'''
 
         self.DV_DELAYED[:self.n_coarse] = self.DV_DELAYED[-self.n_coarse:]
         self.DV_DELAYED[-self.n_coarse:] = self.DV_COMB_OUT[self.n_coarse-self.n_delay:-self.n_delay]
 
 
     def mod_to_fr(self):
+        r'''This function modulates the error signal to the resonant frequency of the cavity.'''
+
         self.DV_MOD_FR[:self.n_coarse] = self.DV_MOD_FR[-self.n_coarse:]
         # Note here that dphi_rf is already accumulated somewhere else (i.e. in the tracker).
         self.DV_MOD_FR[-self.n_coarse:] = modulator(self.DV_DELAYED[-self.n_coarse:],
@@ -723,12 +744,17 @@ class SPSOneTurnFeedback(object):
 
 
     def mov_avg(self):
+        r'''This function applies the cavity filter, modelled as a moving average, to the modulated
+        error signal.'''
+
         self.DV_MOV_AVG[:self.n_coarse] = self.DV_MOV_AVG[-self.n_coarse:]
         self.DV_MOV_AVG[-self.n_coarse:] = moving_average(self.DV_MOD_FR[-self.n_mov_av - self.n_coarse + 1:], self.n_mov_av)
 
 
     # GENERATOR MODEL
     def mod_to_frf(self):
+        r'''This function modulates the error signal from the resonant frequency of the cavity to the
+        original carrier frequency, the RF frequency.'''
 
         self.DV_MOD_FRF[:self.n_coarse] = self.DV_MOD_FRF[-self.n_coarse:]
         # Note here that dphi_rf is already accumulated somewhere else (i.e. in the tracker).
@@ -740,6 +766,7 @@ class SPSOneTurnFeedback(object):
 
 
     def sum_and_gain(self):
+        r''''''
 
         self.I_GEN[:self.n_coarse] = self.I_GEN[-self.n_coarse:]
         self.I_GEN[-self.n_coarse:] = self.DV_MOD_FRF[-self.n_coarse:] + self.open_drive * self.V_SET[-self.n_coarse:]
