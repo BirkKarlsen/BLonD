@@ -189,10 +189,9 @@ def rf_beam_current(Profile, omega_c, T_rev, lpf=True, downsample=None, external
         # Phase correction
         bucket = 2 * np.pi/(omega_c)
         # This term takes into account where the sampling of the profile starts
-        add_corr = Profile.bin_centers[0] / (bucket/2) - int(Profile.bin_centers[0] / (bucket/2)) \
+        add_corr = Profile.bin_centers[0] / (bucket/2) - int(round(Profile.bin_centers[0] / (bucket/2))) \
                    - Profile.bin_size / bucket
-        phase = (Profile.bin_centers[0] - Profile.bin_size/2 - 0.5*bucket)/bucket*2*np.pi \
-                + np.angle(charges_fine)[0] - np.pi * add_corr
+        phase = np.angle(charges_fine)[0] - np.pi * add_corr
         charges_fine = charges_fine * np.exp(-1j * phase)  # TODO: plus or minus
 
     if downsample:
