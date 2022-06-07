@@ -243,6 +243,8 @@ class SPSCavityFeedback(object):
         self.track_init(debug=Commissioning.debug)
 
     def track(self):
+        r'''Main tracking method for the SPSCavityFeedback. This tracks both cavity types
+        with beam.'''
 
         self.OTFB_1.track()
         self.OTFB_2.track()
@@ -766,7 +768,9 @@ class SPSOneTurnFeedback(object):
 
 
     def sum_and_gain(self):
-        r''''''
+        r'''Summing of the error signal from the LLRF-part of the model and the set point voltage.
+        The generator current is then found by multiplying by the transmitter gain and R_gen. The feed-forward
+        current will also be added to the generator current if enabled.'''
 
         self.I_GEN[:self.n_coarse] = self.I_GEN[-self.n_coarse:]
         self.I_GEN[-self.n_coarse:] = self.DV_MOD_FRF[-self.n_coarse:] + self.open_drive * self.V_SET[-self.n_coarse:]
@@ -778,6 +782,9 @@ class SPSOneTurnFeedback(object):
 
 
     def gen_response(self):
+        r'''Generator current is convolved with cavity response towards the generator to get the
+        generator-induced voltage. Multiplied by the number of cavities to find the total generator-
+        induced voltage.'''
 
         self.V_IND_COARSE_GEN[:self.n_coarse] = self.V_IND_COARSE_GEN[-self.n_coarse:]
         self.V_IND_COARSE_GEN[-self.n_coarse:] = self.n_cavities * self.matr_conv(self.I_GEN,
@@ -786,6 +793,9 @@ class SPSOneTurnFeedback(object):
 
     # BEAM MODEL
     def beam_response(self, coarse=False):
+        r'''Computes the beam-induced voltage on the fine- and coarse-grid by convolving
+        the RF beam current with the cavity response towards the beam. The voltage is
+        multiplied by the number of cavities to find the total.'''
         self.logger.debug('Matrix convolution for V_ind')
 
         if coarse:
@@ -802,14 +812,14 @@ class SPSOneTurnFeedback(object):
 
 
     def matr_conv(self, I, h):
-        """Convolution of beam current with impulse response; uses a complete
-        matrix with off-diagonal elements."""
+        r'''Convolution of beam current with impulse response; uses a complete
+        matrix with off-diagonal elements.'''
 
         return scipy.signal.fftconvolve(I, h, mode='full')[:I.shape[0]]
 
 
     def call_conv(self, signal, kernel):
-        """Routine to call optimised C++ convolution"""
+        r'''Routine to call optimised C++ convolution'''
 
         # Make sure that the buffers are stored contiguously
         signal = np.ascontiguousarray(signal)
@@ -822,6 +832,7 @@ class SPSOneTurnFeedback(object):
 
 
     def update_variables(self):
+        r'''Updates the parameteres in the OTFB which can vary from turn to turn.'''
 
         # Present time step
         self.counter = self.rf.counter[0]
@@ -846,6 +857,7 @@ class SPSOneTurnFeedback(object):
 
     # Power related functions
     def calc_power(self):
+        r'''Method to compute the generator power'''
         self.II_COARSE_GEN = np.copy(self.I_GEN)
         self.P_GEN = get_power_gen_I2(self.II_COARSE_GEN, 50)
 
@@ -929,6 +941,7 @@ class LHCRFFeedback(object):
 
 
     def generate_white_noise(self, n_points):
+        r'''Generates white noise'''
 
         rnd.seed(self.seed1)
         r1 = rnd.random_sample(n_points)
