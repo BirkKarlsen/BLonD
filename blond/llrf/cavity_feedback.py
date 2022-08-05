@@ -765,11 +765,12 @@ class SPSOneTurnFeedback(object):
         self.DV_MOD_FRF[:self.n_coarse] = self.DV_MOD_FRF[-self.n_coarse:]
         # Note here that dphi_rf is already accumulated somewhere else (i.e. in the tracker).
         # TODO: RF centers note taken into for modulation?
+        dphi_demod = (self.omega_r - self.omega_c) * self.TWC.tau#* self.T_s * (self.n_mov_av - 1)/2
         self.DV_MOD_FRF[-self.n_coarse:] = self.open_FB * modulator(self.DV_MOV_AVG[-self.n_coarse:],
                                                                     self.omega_r, self.omega_c,
                                                                     self.rf.t_rf[0, self.counter],
                                                                     phi_0=-(self.dphi_mod + self.rf.dphi_rf[0]
-                                                                + (self.omega_r - self.omega_c) * self.TWC.tau))
+                                                                            + dphi_demod))
 
 
     def sum_and_gain(self):

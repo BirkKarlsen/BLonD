@@ -67,7 +67,7 @@ ring = Ring(C, alpha, p_s, Particle=Proton(), n_turns=1)
 rf = RFStation(ring, [h], [3.1e6], [dphi]) # SPS-equivalent for 0.57 eVs, 1.65 ns
 
 bunch = Beam(ring, N_m, N_p)
-bigaussian(ring, rf, bunch, sigma_dt=1.65e-9/4) #tau_0)
+bigaussian(ring, rf, bunch, sigma_dt=1.65e-9/4, seed=1234)
 # Real RF voltage
 rf = RFStation(ring, [h], [V], [dphi])
 
