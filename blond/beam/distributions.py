@@ -88,7 +88,7 @@ def matched_from_line_density(beam, full_ring_and_RF, line_density_input=None,
         line_density_ -= np.min(line_density_)
         line_density_ *= beam.n_macroparticles / np.sum(line_density_)
 
-    elif line_density_type != 'user_input':
+    elif line_density_type == 'user_input':
         # Time coordinates for the line density
         time_line_den = line_density_input['time_line_den']
         n_points_line_den = len(time_line_den)
