@@ -1237,7 +1237,7 @@ class LHCCavityLoop(object):
         r'''Voltage set point'''
 
         V_set = polar_to_cartesian(self.rf.voltage[0, self.counter]/self.n_cav,
-            self.rf.phi_rf[0, self.counter] - 0.5 * np.pi)
+            self.rf.phi_rf[0, self.counter])# - 0.5 * np.pi)
 
         return self.open_drive * V_set * np.ones(self.n_coarse)
 
