@@ -1069,8 +1069,11 @@ class LHCCavityLoop(object):
         self.V_ANT = np.zeros(2 * self.n_coarse, dtype=complex)
         self.V_EXC = np.zeros(2 * self.n_coarse, dtype=complex)
         self.V_FB_IN = np.zeros(2 * self.n_coarse, dtype=complex)
+        self.V_AC_IN = np.zeros(2 * self.n_coarse, dtype=complex)
+        self.V_COMB_PREV = np.zeros(2 * self.n_coarse, dtype=complex)
         self.V_OTFB = np.zeros(2 * self.n_coarse, dtype=complex)
         self.V_OTFB_INT = np.zeros(2 * self.n_coarse, dtype=complex)
+        self.V_FIR_OUT = np.zeros(2 * self.n_coarse, dtype=complex)
         self.I_GEN = np.zeros(2 * self.n_coarse, dtype=complex)
         self.I_BEAM = np.zeros(2 * self.n_coarse, dtype=complex)
         self.I_TEST = np.zeros(2 * self.n_coarse, dtype=complex)
@@ -1139,61 +1142,32 @@ class LHCCavityLoop(object):
         return 0.5 * self.R_over_Q * self.Q_L * np.absolute(self.I_GEN)**2
 
 
-    def one_turn_feedback(self): # ORIG
-
-        # AC coupling at input
-        self.V_OTFB_INT[self.ind] = self.V_OTFB_INT[self.ind - 1] * (
-            1 - self.T_s / self.tau_o) + \
-            self.V_FB_IN[self.ind-self.n_coarse+self.n_otfb] - self.V_FB_IN[self.ind-self.n_coarse+self.n_otfb-1]
-        # OTFB response
-        self.V_OTFB[self.ind] = self.alpha*self.V_OTFB[self.ind-self.n_coarse] \
-           + self.G_o*(1 - self.alpha)*self.V_OTFB_INT[self.ind] #-self.n_coarse+self.n_delay]
-        # LHC FIR filter with 63 taps
-        #self.V_OTFB[self.ind] = self.fir_coeff[0]*self.V_OTFB[self.ind]
-        #for k in range(1, self.fir_n_taps):
-        #     self.V_OTFB[self.ind] += self.fir_coeff[k]*self.V_OTFB[self.ind-k]
-        # AC coupling at output
-        self.V_otfb = self.V_otfb_prev*(1 - self.T_s/self.tau_o) + \
-            self.V_OTFB[self.ind] - self.V_OTFB[self.ind-1]
-        # Update memory
-        self.V_otfb_prev = self.V_otfb
-
-
-    def one_turn_feedback_v2(self):
-
-        # AC coupling at input
-        ind = self.ind - self.n_coarse + self.n_otfb
-        self.V_AC1_out = (1 - self.T_s/self.tau_o)*self.V_AC1_out_prev + \
-            self.V_FB_IN[ind] - self.V_FB_IN[ind-1]
-
+    def one_turn_feedback(self):
         # OTFB itself
-        self.V_OTFB_INT[self.ind] = self.alpha*self.V_OTFB_INT[self.ind-self.n_coarse] \
-            + self.G_o*(1 - self.alpha)*self.V_AC1_out
+        self.V_OTFB_INT[self.ind] = self.alpha*self.V_OTFB_INT[self.ind - self.n_coarse] \
+            + self.G_o*(1 - self.alpha)*self.V_AC_IN[self.ind - self.n_coarse + self.n_otfb]
+
+        self.V_COMB_PREV[self.ind] = self.V_AC_IN[self.ind - self.n_coarse + self.n_otfb]
 
         # FIR filter
-        self.V_FIR_out = self.fir_coeff[0]*self.V_OTFB_INT[self.ind]
+        self.V_FIR_OUT[self.ind] = self.fir_coeff[0]*self.V_OTFB_INT[self.ind]
         for k in range(1, self.fir_n_taps):
-             self.V_FIR_out += self.fir_coeff[k]*self.V_OTFB_INT[self.ind-k]
-        #self.V_FIR_out = self.V_OTFB_INT[self.ind]
+             self.V_FIR_OUT[self.ind] += self.fir_coeff[k]*self.V_OTFB_INT[self.ind - k]
 
         # AC coupling at output
         self.V_OTFB[self.ind] = (1 - self.T_s/self.tau_o) * \
-            self.V_OTFB[self.ind-1] + self.V_FIR_out - self.V_FIR_out_prev
-
-        # Update memory
-        #self.V_otfb = self.V_OTFB[self.ind]
-        self.V_AC1_out_prev = self.V_AC1_out
-        self.V_FIR_out_prev = self.V_FIR_out
+            self.V_OTFB[self.ind-1] + self.V_FIR_OUT[self.ind] - self.V_FIR_OUT[self.ind - 1]
 
 
     def rf_beam_current(self):
         r'''RF beam current calculation from beam profile'''
 
+        self.I_BEAM[:self.n_coarse] = self.I_BEAM[-self.n_coarse:]
         # Beam current at rf frequency from profile
         self.I_BEAM_FINE, self.I_BEAM[-self.n_coarse:] = rf_beam_current(self.profile, self.omega,
             self.rf.t_rev[self.counter], lpf=False,
             downsample={'Ts': self.T_s, 'points': self.n_coarse},
-            external_reference=False)  #self.rf.t_rev[self.counter] #self.profile.bin_size
+            external_reference=True)  #self.rf.t_rev[self.counter] #self.profile.bin_size
         self.I_BEAM_FINE *= np.exp(-1j * 0.5 * np.pi * 2) / self.T_s # 90 deg phase shift w.r.t. V_set in real
         self.I_BEAM[-self.n_coarse:] *= np.exp(-1j * 0.5 * np.pi * 2) / self.T_s
 
@@ -1202,15 +1176,15 @@ class LHCCavityLoop(object):
         r'''Analog and digital RF feedback response'''
 
         # Calculate voltage difference to act on
-        self.V_fb_in = (self.V_SET[self.ind] -
-                        self.open_loop * self.V_ANT[self.ind-self.n_delay])
+        self.V_fb_in = (self.V_SET[self.ind - self.n_delay] -
+                        self.open_loop * self.V_ANT[self.ind - self.n_delay])
         self.V_FB_IN[self.ind] = self.V_fb_in
 
         # On the analog branch, OTFB can contribute
-        #self.one_turn_feedback()
-        #self.V_a_in = self.V_fb_in + self.open_otfb*self.V_otfb \
-        #    + int(bool(self.excitation_otfb))*self.V_EXC[self.ind]
-        self.one_turn_feedback_v2()
+        self.V_AC_IN[self.ind] = (1 - self.T_s/self.tau_o)*self.V_AC_IN[self.ind-1] + \
+            self.V_FB_IN[self.ind] - self.V_FB_IN[self.ind - 1]
+        self.one_turn_feedback()
+
         self.V_a_in = self.V_fb_in + self.open_otfb * self.V_OTFB[self.ind] \
             + int(bool(self.excitation_otfb)) * self.V_EXC[self.ind]
 
@@ -1356,10 +1330,9 @@ class LHCCavityLoop(object):
 
         self.track_one_turn()
         if self.excitation_otfb_1:
-            self.V_EXC_OUT[0:self.n_coarse] = self.V_FB_IN[self.n_coarse:2*self.n_coarse]
+            self.V_EXC_OUT[:self.n_coarse] = self.V_FB_IN[self.n_coarse:2*self.n_coarse]
         elif self.excitation_otfb_2:
-            #self.V_EXC_OUT[0:self.n_coarse] = self.V_otfb
-            self.V_EXC_OUT[0:self.n_coarse] = self.V_OTFB[self.ind]
+            self.V_EXC_OUT[:self.n_coarse] = self.V_OTFB[self.ind]
         for n in range(1, n_turns):
             self.update_arrays()
             self.V_EXC = np.concatenate(
@@ -1392,10 +1365,13 @@ class LHCCavityLoop(object):
         self.V_SET = np.concatenate((np.zeros(self.n_coarse, dtype=complex),
                                      self.set_point()))
         self.track_one_turn()
+        self.v_ant_trans = np.zeros(n_turns)
+        self.v_ant_trans[0] = (np.max(np.abs(self.V_ANT)) - np.mean(np.abs(self.V_ANT)))/np.mean(np.abs(self.V_ANT))
         for n in range(1, n_turns):
             self.update_arrays()
             self.update_set_point()
             self.track_one_turn()
+            self.v_ant_trans[n] = (np.max(np.abs(self.V_ANT)) - np.mean(np.abs(self.V_ANT)))/np.mean(np.abs(self.V_ANT))
 
 
     def update_arrays(self):
@@ -1407,9 +1383,13 @@ class LHCCavityLoop(object):
                                     np.zeros(self.n_coarse, dtype=complex)))
         self.V_FB_IN = np.concatenate((self.V_FB_IN[self.n_coarse:],
                                     np.zeros(self.n_coarse, dtype=complex)))
+        self.V_AC_IN = np.concatenate((self.V_AC_IN[self.n_coarse:],
+                                       np.zeros(self.n_coarse, dtype=complex)))
         self.V_OTFB = np.concatenate((self.V_OTFB[self.n_coarse:],
                                     np.zeros(self.n_coarse, dtype=complex)))
         self.V_OTFB_INT = np.concatenate((self.V_OTFB_INT[self.n_coarse:],
+                                    np.zeros(self.n_coarse, dtype=complex)))
+        self.V_FIR_OUT = np.concatenate((self.V_FIR_OUT[self.n_coarse:],
                                     np.zeros(self.n_coarse, dtype=complex)))
         self.I_BEAM = np.concatenate((self.I_BEAM[self.n_coarse:],
                                      np.zeros(self.n_coarse, dtype=complex)))
@@ -1446,7 +1426,8 @@ class LHCCavityLoop(object):
         self.rf_centers = (np.arange(self.n_coarse) + 0.5) * self.T_s
         # Delay time
         self.n_delay = int(self.tau_loop/self.T_s)
-        self.n_otfb = int(self.tau_otfb/self.T_s + 0.5*(self.fir_n_taps-1))
+        self.n_fir = int(0.5 * (self.fir_n_taps - 1))
+        self.n_otfb = int(self.tau_otfb/self.T_s) + self.n_fir
         # Present rf frequency
         self.omega = self.rf.omega_rf[0, self.counter]
         # Present detuning
