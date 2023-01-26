@@ -1167,7 +1167,7 @@ class LHCCavityLoop(object):
         self.I_BEAM_FINE, self.I_BEAM[-self.n_coarse:] = rf_beam_current(self.profile, self.omega,
             self.rf.t_rev[self.counter], lpf=False,
             downsample={'Ts': self.T_s, 'points': self.n_coarse},
-            external_reference=True)  #self.rf.t_rev[self.counter] #self.profile.bin_size
+            external_reference=True, machine='LHC')  #self.rf.t_rev[self.counter] #self.profile.bin_size
         self.I_BEAM_FINE *= 1j * np.exp(-1j * np.pi) / self.T_s # 90 deg phase shift w.r.t. V_set in real
         self.I_BEAM[-self.n_coarse:] *= 1j * np.exp(-1j * np.pi) / self.T_s
 
@@ -1220,8 +1220,15 @@ class LHCCavityLoop(object):
         r'''Model of the Switch and Protect module: clamping of the output
         power above a given input power.'''
 
-        #TODO: to be implemented
+        # TODO: to be implemented
         self.V_swap_out = self.V_fb_out
+
+
+    def tuner(self):
+        r'''Model of the tuner algorithm.'''
+
+        # TODO: implement tuner
+        self.detuning = self.detuning
 
 
     def track(self):
@@ -1235,7 +1242,7 @@ class LHCCavityLoop(object):
 
         # Find the fine-grid antenna voltage
         self.V_sum = np.interp(self.profile.bin_centers, self.rf_centers,
-                             self.V_ANT[-self.n_coarse:])
+                             self.n_cav * self.V_ANT[-self.n_coarse:])
 
         # corrections in voltage ampitude and phase
         self.V_corr, self.alpha_sum = cartesian_to_polar(self.V_sum)

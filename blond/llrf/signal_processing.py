@@ -105,7 +105,7 @@ def modulator(signal, omega_i, omega_f, T_sampling, phi_0=0):
     return I_new + 1j*Q_new
 
 
-def rf_beam_current(Profile, omega_c, T_rev, lpf=True, downsample=None, external_reference=True):
+def rf_beam_current(Profile, omega_c, T_rev, lpf=True, downsample=None, external_reference=True, machine='SPS'):
     r"""Function calculating the beam charge at the (RF) frequency, slice by
     slice. The charge distribution [C] of the beam is determined from the beam
     profile :math:`\lambda_i`, the particle charge :math:`q_p` and the real vs.
@@ -173,8 +173,11 @@ def rf_beam_current(Profile, omega_c, T_rev, lpf=True, downsample=None, external
     logger.debug("DC current is %.4e A", np.sum(charges)/T_rev)
 
     # Mix with frequency of interest; remember factor 2 demodulation
-    I_f = 2.*charges*np.cos(omega_c*Profile.bin_centers)
-    Q_f = -2.*charges*np.sin(omega_c*Profile.bin_centers)
+    I_f = 2. * charges * np.cos(omega_c * Profile.bin_centers)
+    if machine=='LHC':
+        Q_f = 2. * charges * np.sin(omega_c * Profile.bin_centers)
+    else:
+        Q_f = -2. * charges * np.sin(omega_c * Profile.bin_centers)
 
     # Pass through a low-pass filter
     if lpf is True:
