@@ -918,8 +918,8 @@ class LHCRFFeedback(object):
     '''
 
     def __init__(self, alpha=15/16, d_phi_ad=0, G_a=0.00001, G_d=10, G_o=10,
-                 tau_a=170e-6, tau_d=400e-6, tau_o=110e-6, open_drive=False,
-                 open_loop=False, open_otfb=False, open_rffb=False,
+                 tau_a=170e-6, tau_d=400e-6, tau_o=110e-6, mu=0.0001, open_drive=False,
+                 open_loop=False, open_otfb=False, open_rffb=False, open_tuner=False,
                  excitation=False, excitation_otfb_1=False,
                  excitation_otfb_2=False, seed1=1234, seed2=7564):
 
@@ -932,6 +932,7 @@ class LHCRFFeedback(object):
         self.tau_a = tau_a
         self.tau_d = tau_d
         self.tau_o = tau_o
+        self.mu = mu
         self.excitation = excitation
         self.excitation_otfb_1 = excitation_otfb_1
         self.excitation_otfb_2 = excitation_otfb_2
@@ -944,6 +945,7 @@ class LHCRFFeedback(object):
         self.open_loop = int(np.invert(bool(open_loop)))
         self.open_otfb = int(np.invert(bool(open_otfb)))
         self.open_rffb = int(np.invert(bool(open_rffb)))
+        self.open_tuner = int(np.invert(bool(open_tuner)))
 
 
     def generate_white_noise(self, n_points):
@@ -1040,6 +1042,7 @@ class LHCCavityLoop(object):
         self.open_loop = self.RFFB.open_loop
         self.open_otfb = self.RFFB.open_otfb
         self.open_rffb = self.RFFB.open_rffb
+        self.open_tuner = self.RFFB.open_tuner
         self.alpha = self.RFFB.alpha
         self.d_phi_ad = self.RFFB.d_phi_ad
         self.G_a = self.RFFB.G_a
@@ -1048,6 +1051,7 @@ class LHCCavityLoop(object):
         self.tau_a = self.RFFB.tau_a
         self.tau_d = self.RFFB.tau_d
         self.tau_o = self.RFFB.tau_o
+        self.mu = self.RFFB.mu
         self.excitation = self.RFFB.excitation
         self.excitation_otfb_1 = self.RFFB.excitation_otfb_1
         self.excitation_otfb_2 = self.RFFB.excitation_otfb_2
@@ -1077,6 +1081,8 @@ class LHCCavityLoop(object):
         self.I_GEN = np.zeros(2 * self.n_coarse, dtype=complex)
         self.I_BEAM = np.zeros(2 * self.n_coarse, dtype=complex)
         self.I_TEST = np.zeros(2 * self.n_coarse, dtype=complex)
+        self.TUNER_INPUT = np.zeros(2 * self.n_coarse, dtype=complex)
+        self.TUNER_INTEGRATED = np.zeros(2 * self.n_coarse, dtype=complex)
 
         # Arrays related to the corrections feeding into tracker
         self.V_sum = np.zeros(self.profile.n_slices, dtype=complex)
@@ -1226,9 +1232,25 @@ class LHCCavityLoop(object):
 
     def tuner(self):
         r'''Model of the tuner algorithm.'''
+        dtune = - (self.mu / 2) * (np.min(self.TUNER_INTEGRATED[-self.n_coarse:].imag) +
+                                   np.max(self.TUNER_INTEGRATED[-self.n_coarse:].imag)) / \
+                np.mean(np.abs(self.V_SET[-self.n_coarse:]))**2
 
-        # TODO: implement tuner
-        self.detuning = self.detuning
+        self.detuning = self.detuning + dtune * self.open_tuner
+        self.d_omega = self.detuning * self.omega_c
+        self.omega_c = self.omega + self.d_omega
+
+
+    def tuner_input(self):
+        r'''Gathering data for the detuning algortithm'''
+
+        # Calculating input signal
+        self.TUNER_INPUT[self.ind] = self.I_GEN[self.ind] * np.conj(self.V_ANT[self.ind])
+
+        # Apply CIC-component
+        self.TUNER_INTEGRATED[self.ind] = (1/64) * (self.TUNER_INPUT[self.ind] - 2 * self.TUNER_INPUT[self.ind - 8] +
+                                                    self.TUNER_INPUT[self.ind - 16]) + \
+                                          2 * self.TUNER_INTEGRATED[self.ind - 1] - self.TUNER_INTEGRATED[self.ind - 2]
 
 
     def track(self):
@@ -1250,6 +1272,7 @@ class LHCCavityLoop(object):
         # Calculate OTFB correction w.r.t. RF voltage and phase in RFStation
         self.V_corr /= self.rf.voltage[0, self.rf.counter[0]]
         self.phi_corr = (self.alpha_sum - np.angle(self.V_SET[-self.n_coarse]))
+        self.tuner()
 
 
     def track_simple(self, I_rf_pk):
@@ -1283,6 +1306,7 @@ class LHCCavityLoop(object):
             self.rf_feedback()
             self.swap()
             self.generator_current()
+            self.tuner_input()
 
 
     def track_no_beam_excitation(self, n_turns):
@@ -1404,6 +1428,10 @@ class LHCCavityLoop(object):
                                     np.zeros(self.n_coarse, dtype=complex)))
         self.I_TEST = np.concatenate((self.I_TEST[self.n_coarse:],
                                      np.zeros(self.n_coarse, dtype=complex)))
+        self.TUNER_INPUT = np.concatenate((self.TUNER_INPUT[self.n_coarse:],
+                                     np.zeros(self.n_coarse, dtype=complex)))
+        self.TUNER_INTEGRATED = np.concatenate((self.TUNER_INTEGRATED[self.n_coarse:],
+                                     np.zeros(self.n_coarse, dtype=complex)))
 
 
     def update_set_point(self):
@@ -1441,7 +1469,7 @@ class LHCCavityLoop(object):
         self.d_omega = self.omega_c - self.omega
         # Dimensionless quantities
         self.samples = self.omega*self.T_s
-        self.detuning = self.d_omega/self.omega
+        self.detuning = self.d_omega/self.omega_c
 
 
     @staticmethod
