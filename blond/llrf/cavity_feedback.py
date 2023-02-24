@@ -918,7 +918,7 @@ class LHCRFFeedback(object):
     '''
 
     def __init__(self, alpha=15/16, d_phi_ad=0, G_a=0.00001, G_d=10, G_o=10,
-                 tau_a=170e-6, tau_d=400e-6, tau_o=110e-6, mu=0.0001, open_drive=False,
+                 tau_a=170e-6, tau_d=400e-6, tau_o=110e-6, mu=-0.0001, open_drive=False,
                  open_loop=False, open_otfb=False, open_rffb=False, open_tuner=False,
                  excitation=False, excitation_otfb_1=False,
                  excitation_otfb_2=False, seed1=1234, seed2=7564):
