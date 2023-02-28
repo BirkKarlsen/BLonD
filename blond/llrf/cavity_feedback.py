@@ -18,6 +18,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import numpy.random as rnd
 import scipy.signal
+from scipy.sparse import diags, csr_matrix
+from scipy.sparse.linalg import spsolve
 import sys
 
 
@@ -1089,6 +1091,8 @@ class LHCCavityLoop(object):
         self.V_corr = np.zeros(self.profile.n_slices)
         self.alpha_sum = np.zeros(self.profile.n_slices)
         self.phi_corr = np.zeros(self.profile.n_slices)
+        self.V_ANT_FINE = np.zeros(self.profile.n_slices + 1, dtype=complex)
+        self.I_GEN_FINE = np.zeros(self.profile.n_slices + 1, dtype=complex)
 
         # Scalar variables
         self.V_a_in_prev = 0
@@ -1125,6 +1129,40 @@ class LHCCavityLoop(object):
             self.Q_L + 1j * self.detuning * self.samples) - \
             self.I_BEAM[self.ind-1] * 0.5 * self.R_over_Q * self.samples
 
+    def cavity_response_fine(self):
+        r'''ACS cavity response model on the fine-grid'''
+        # TODO: Fix this adhoc solution
+        self.I_BEAM_FINE = np.concatenate((np.zeros(1, dtype=complex), self.I_BEAM_FINE))
+        self.samples_fine = self.omega * self.profile.bin_size
+
+        for i in range(self.profile.n_slices):
+            self.V_ANT_FINE[i + 1] = self.I_GEN_FINE[i] * self.R_over_Q * self.samples_fine + \
+                self.V_ANT_FINE[i] * (1 - 0.5 * self.samples_fine / self.Q_L +
+                                      1j * self.detuning * self.samples_fine) - \
+                self.I_BEAM_FINE[i] * 0.5 * self.R_over_Q * self.samples_fine
+
+    def cavity_response_fine_matrix(self):
+        r'''ACS cavity response model in matrix form on the fine-grid'''
+        # Add a zero at the start of RF beam current
+        self.I_BEAM_FINE = np.concatenate((np.zeros(1, dtype=complex), self.I_BEAM_FINE))
+
+        # Number of samples on fine grid
+        self.samples_fine = self.omega * self.profile.bin_size
+
+        # Compute matrix elements
+        A = 0.5 * self.R_over_Q * self.samples_fine
+        B = 1 - 0.5 * self.samples_fine / self.Q_L + 1j * self.detuning * self.samples_fine
+
+        # Initialize the two sparse matrices needed to find antenna voltage
+        B_matrix = diags([-B, 1], [-1, 0],
+                         (self.profile.n_slices + 1, self.profile.n_slices + 1), dtype=complex)
+        I_matrix = diags([A], [-1], (self.profile.n_slices + 1, self.profile.n_slices + 1), dtype=complex)
+
+        # Find vector on the "currrent" side of the equation
+        b = I_matrix.dot(2 * self.I_GEN_FINE - self.I_BEAM_FINE)
+
+        # Solve the sparse linear system of equations
+        self.V_ANT_FINE = spsolve(csr_matrix(B_matrix), b)
 
     def generator_current(self):
         r'''Generator response
@@ -1173,9 +1211,9 @@ class LHCCavityLoop(object):
         self.I_BEAM_FINE, self.I_BEAM[-self.n_coarse:] = rf_beam_current(self.profile, self.omega,
             self.rf.t_rev[self.counter], lpf=False,
             downsample={'Ts': self.T_s, 'points': self.n_coarse},
-            external_reference=True, machine='LHC')  #self.rf.t_rev[self.counter] #self.profile.bin_size
-        self.I_BEAM_FINE *= 1j * np.exp(-1j * np.pi) / self.T_s # 90 deg phase shift w.r.t. V_set in real
-        self.I_BEAM[-self.n_coarse:] *= 1j * np.exp(-1j * np.pi) / self.T_s
+            external_reference=True, machine='SPS')  #self.rf.t_rev[self.counter] #self.profile.bin_size
+        self.I_BEAM_FINE *= -1j * np.exp(1j * np.pi) / self.profile.bin_size # 90 deg phase shift w.r.t. V_set in real
+        self.I_BEAM[-self.n_coarse:] *= -1j * np.exp(1j * np.pi) / self.T_s
 
 
     def rf_feedback(self):
@@ -1234,7 +1272,7 @@ class LHCCavityLoop(object):
         r'''Model of the tuner algorithm.'''
         dtune = - (self.mu / 2) * (np.min(self.TUNER_INTEGRATED[-self.n_coarse:].imag) +
                                    np.max(self.TUNER_INTEGRATED[-self.n_coarse:].imag)) / \
-                np.mean(np.abs(self.V_SET[-self.n_coarse:]))**2
+                (self.rf.voltage[0, self.counter]/self.n_cav)**2
 
         self.detuning = self.detuning + dtune * self.open_tuner
         self.d_omega = self.detuning * self.omega_c
@@ -1266,8 +1304,14 @@ class LHCCavityLoop(object):
         self.V_sum = np.interp(self.profile.bin_centers, self.rf_centers,
                              self.n_cav * self.V_ANT[-self.n_coarse:])
 
+        self.I_GEN_FINE = np.interp(np.concatenate((np.array([self.profile.bin_centers[0] - self.profile.bin_size]),
+                                                    self.profile.bin_centers)), self.rf_centers,
+                                    self.I_GEN[-self.n_coarse:])
+
+        self.cavity_response_fine_matrix()
+        self.V_ANT_FINE *= self.n_cav
         # corrections in voltage ampitude and phase
-        self.V_corr, self.alpha_sum = cartesian_to_polar(self.V_sum)
+        self.V_corr, self.alpha_sum = cartesian_to_polar(self.V_ANT_FINE[-self.profile.n_slices:])
 
         # Calculate OTFB correction w.r.t. RF voltage and phase in RFStation
         self.V_corr /= self.rf.voltage[0, self.rf.counter[0]]
@@ -1556,4 +1600,3 @@ class LHCCavityLoop(object):
         '''
 
         return voltage/(R_over_Q*real_peak_beam_current)
-
