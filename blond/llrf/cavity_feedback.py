@@ -1211,7 +1211,7 @@ class LHCCavityLoop(object):
         self.I_BEAM_FINE, self.I_BEAM[-self.n_coarse:] = rf_beam_current(self.profile, self.omega,
             self.rf.t_rev[self.counter], lpf=False,
             downsample={'Ts': self.T_s, 'points': self.n_coarse},
-            external_reference=True, machine='SPS')  #self.rf.t_rev[self.counter] #self.profile.bin_size
+            external_reference=True)  #self.rf.t_rev[self.counter] #self.profile.bin_size
         self.I_BEAM_FINE *= -1j * np.exp(1j * np.pi) / self.profile.bin_size # 90 deg phase shift w.r.t. V_set in real
         self.I_BEAM[-self.n_coarse:] *= -1j * np.exp(1j * np.pi) / self.T_s
 
