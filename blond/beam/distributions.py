@@ -46,11 +46,11 @@ def matched_from_line_density(beam, full_ring_and_RF, line_density_input=None,
     '''    
         
     # Initialize variables depending on the accelerator parameters
-    slippage_factor = full_ring_and_RF.RingAndRFSection_list[0].eta_0[0]
+    slippage_factor = full_ring_and_RF.RingAndRFSection_list[0].rf_params.eta_0[0]
     
     eom_factor_dE = abs(slippage_factor) / (2*beam.beta**2. * beam.energy)
     eom_factor_potential = (np.sign(slippage_factor) * beam.Particle.charge /
-                          (full_ring_and_RF.RingAndRFSection_list[0].t_rev[0]))
+                          (full_ring_and_RF.RingAndRFSection_list[0].rf_params.t_rev[0]))
      
     #: *Number of points to be used in the potential well calculation*
     n_points_potential = int(n_points_potential)
@@ -88,7 +88,7 @@ def matched_from_line_density(beam, full_ring_and_RF, line_density_input=None,
         line_density_ -= np.min(line_density_)
         line_density_ *= beam.n_macroparticles / np.sum(line_density_)
 
-    elif line_density_type != 'user_input':
+    elif line_density_type == 'user_input':
         # Time coordinates for the line density
         time_line_den = line_density_input['time_line_den']
         n_points_line_den = len(time_line_den)
@@ -411,13 +411,13 @@ def matched_from_distribution_function(beam, full_ring_and_RF,
         distribution_function_ = distribution_function
     
     # Initialize variables depending on the accelerator parameters
-    slippage_factor = full_ring_and_RF.RingAndRFSection_list[0].eta_0[turn_number]
+    slippage_factor = full_ring_and_RF.RingAndRFSection_list[0].rf_params.eta_0[turn_number]
     beta = full_ring_and_RF.RingAndRFSection_list[0].rf_params.beta[turn_number]
     energy = full_ring_and_RF.RingAndRFSection_list[0].rf_params.energy[turn_number]
     
     eom_factor_dE = abs(slippage_factor) / (2*beta**2. * energy)
     eom_factor_potential = (np.sign(slippage_factor) * beam.Particle.charge /
-                          (full_ring_and_RF.RingAndRFSection_list[0].t_rev[turn_number]))
+                          (full_ring_and_RF.RingAndRFSection_list[0].rf_params.t_rev[turn_number]))
 
     #: *Number of points to be used in the potential well calculation*
     n_points_potential = int(n_points_potential)
@@ -796,7 +796,7 @@ def line_density(coord_array, dist_type, bunch_length, bunch_position=0,
 
 
 
-def bigaussian(Ring, RFStation, Beam, sigma_dt, sigma_dE = None, seed = None,
+def bigaussian(Ring, RFStation, Beam, sigma_dt, sigma_dE = None, seed = 1234,
                reinsertion = False):
     r"""Function generating a Gaussian beam both in time and energy 
     coordinates. Fills Beam.dt and Beam.dE arrays.
