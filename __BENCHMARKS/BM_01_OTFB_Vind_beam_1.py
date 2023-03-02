@@ -1,8 +1,8 @@
 # coding: utf8
-# Copyright 2014-2017 CERN. This software is distributed under the
-# terms of the GNU General Public Licence version 3 (GPL Version 3), 
+# Copyright 2014-2020 CERN. This software is distributed under the
+# terms of the GNU General Public Licence version 3 (GPL Version 3),
 # copied verbatim in the file LICENCE.md.
-# In applying this licence, CERN does not waive the privileges and immunities 
+# In applying this licence, CERN does not waive the privileges and immunities
 # granted to it by virtue of its status as an Intergovernmental Organization or
 # submit itself to any jurisdiction.
 # Project website: http://blond.web.cern.ch/
@@ -50,7 +50,7 @@ N_t = 1000                  # Number of turns to track
 # CERN SPS --------------------------------------------------------------------
 
 # OPTIONS TO TEST -------------------------------------------------------------
-LOGGING = False              # Logging messages
+LOGGING = True              # Logging messages
 RF_CURRENT = True           # RF beam current
 RF_CURRENT2 = True          # RF beam current
 IMP_RESP = True             # Impulse response of travelling wave cavity
