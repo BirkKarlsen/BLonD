@@ -110,17 +110,17 @@ def matched_from_distribution_density_multibunch(beam, Ring, FullRingAndRF, dist
             distribution_type = None
 
         if 'exponent' in distribution_options:
-            distribution_exponent = distribution_options['exponent']
+            distribution_exponent = distribution_options['exponent'][indexBunch]
         else:
             distribution_exponent = None
 
         if 'emittance' in distribution_options:
-            emittance = distribution_options['emittance']
+            emittance = distribution_options['emittance'][indexBunch]
         else:
             emittance = None
 
         if 'bunch_length' in distribution_options:
-            bunch_length = distribution_options['bunch_length']
+            bunch_length = distribution_options['bunch_length'][indexBunch]
         else:
             bunch_length = None
 
@@ -164,7 +164,7 @@ def matched_from_distribution_density_multibunch(beam, Ring, FullRingAndRF, dist
             beamIteration.dE = bunch.dE
         else:
             beamIteration.dt = np.append(beamIteration.dt, bunch.dt +
-                        (indexBunch * bunch_spacing_buckets * bucket_size_tau))
+                        (bunch_spacing_buckets[indexBunch] * bucket_size_tau))
             beamIteration.dE = np.append(beamIteration.dE, bunch.dE)
 
         beamIteration.n_macroparticles = int(np.sum(n_macroparticles_per_bunch[:indexBunch+1]))
@@ -172,13 +172,13 @@ def matched_from_distribution_density_multibunch(beam, Ring, FullRingAndRF, dist
         beamIteration.ratio = beamIteration.intensity / beamIteration.n_macroparticles
 
 
-        if TotalInducedVoltage is not None:
+        if TotalInducedVoltage is not None and indexBunch < len(bunch_spacing_buckets) - 1:
             TotalInducedVoltageIteration.profile.track()
             TotalInducedVoltageIteration.induced_voltage_sum()
 
-            left_edge = ((indexBunch + 1) * bunch_spacing_buckets *
+            left_edge = (bunch_spacing_buckets[indexBunch + 1] *
                           bucket_size_tau - bucket_tolerance * bucket_size_tau)
-            right_edge = (((indexBunch + 1) * bunch_spacing_buckets + 1) *
+            right_edge = ((bunch_spacing_buckets[indexBunch + 1] + 1) *
                           bucket_size_tau + bucket_tolerance * bucket_size_tau)
 
             bin_centers = TotalInducedVoltageIteration.profile.bin_centers
@@ -190,7 +190,7 @@ def matched_from_distribution_density_multibunch(beam, Ring, FullRingAndRF, dist
                         (bin_centers > left_edge) * (bin_centers < right_edge)]
 
             time_induced_voltage_next_bunch = (tau_induced_voltage_next_bunch -
-                      (indexBunch+1) * bunch_spacing_buckets * bucket_size_tau)
+                      (indexBunch+1) * bunch_spacing_buckets[indexBunch] * bucket_size_tau)
 
             extraVoltageDict = {'time_array':time_induced_voltage_next_bunch,
                                 'voltage_array':induced_voltage_next_bunch}
