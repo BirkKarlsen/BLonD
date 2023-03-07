@@ -18,8 +18,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import numpy.random as rnd
 import scipy.signal
-from scipy.sparse import diags, csr_matrix
+from scipy.sparse import diags
 from scipy.sparse.linalg import spsolve
+from scipy.interpolate import interp1d
 import sys
 
 
@@ -1149,20 +1150,25 @@ class LHCCavityLoop(object):
         # Number of samples on fine grid
         self.samples_fine = self.omega * self.profile.bin_size
 
+        # Find initial value of antenna voltage
+        t_at_init = self.profile.bin_centers[0] - self.profile.bin_size
+        V_A_init = interp1d(self.rf_centers, self.V_ANT[-self.n_coarse:], fill_value='extrapolate')(t_at_init)
+
         # Compute matrix elements
         A = 0.5 * self.R_over_Q * self.samples_fine
         B = 1 - 0.5 * self.samples_fine / self.Q_L + 1j * self.detuning * self.samples_fine
 
         # Initialize the two sparse matrices needed to find antenna voltage
         B_matrix = diags([-B, 1], [-1, 0],
-                         (self.profile.n_slices + 1, self.profile.n_slices + 1), dtype=complex)
+                         (self.profile.n_slices + 1, self.profile.n_slices + 1), dtype=complex, format='csc')
         I_matrix = diags([A], [-1], (self.profile.n_slices + 1, self.profile.n_slices + 1), dtype=complex)
 
         # Find vector on the "currrent" side of the equation
         b = I_matrix.dot(2 * self.I_GEN_FINE - self.I_BEAM_FINE)
+        b[0] = V_A_init
 
         # Solve the sparse linear system of equations
-        self.V_ANT_FINE = spsolve(csr_matrix(B_matrix), b)
+        self.V_ANT_FINE = spsolve(B_matrix, b)
 
     def generator_current(self):
         r'''Generator response
