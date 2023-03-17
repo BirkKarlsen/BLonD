@@ -105,7 +105,7 @@ def modulator(signal, omega_i, omega_f, T_sampling, phi_0=0):
     return I_new + 1j*Q_new
 
 
-def rf_beam_current(Profile, omega_c, T_rev, lpf=True, downsample=None, external_reference=True):
+def rf_beam_current(Profile, omega_c, T_rev, lpf=True, downsample=None, external_reference=True, dT=0):
     r"""Function calculating the beam charge at the (RF) frequency, slice by
     slice. The charge distribution [C] of the beam is determined from the beam
     profile :math:`\lambda_i`, the particle charge :math:`q_p` and the real vs.
@@ -191,7 +191,10 @@ def rf_beam_current(Profile, omega_c, T_rev, lpf=True, downsample=None, external
         # This term takes into account where the sampling of the profile starts
         add_corr = Profile.bin_centers[0] / (bucket/2) - int(round(Profile.bin_centers[0] / (bucket/2))) \
                    - Profile.bin_size / bucket
-        phase = np.angle(charges_fine)[0] - np.pi * add_corr
+        # slippage in phase due to a non-integer harmonic number
+        dphi = dT * omega_c     # TODO: check that this makes sense
+        # Total phase correction
+        phase = np.angle(charges_fine)[0] - np.pi * add_corr + dphi
         charges_fine = charges_fine * np.exp(-1j * phase)
 
     if downsample:
@@ -202,12 +205,12 @@ def rf_beam_current(Profile, omega_c, T_rev, lpf=True, downsample=None, external
             raise RuntimeError('Downsampling input erroneous in rf_beam_current')
 
         # Find which index in fine grid matches index in coarse grid
-        ind_fine = np.floor((Profile.bin_centers - 0.5*Profile.bin_size)/T_s)
+        ind_fine = np.round((Profile.bin_centers + dT)/T_s)
         ind_fine = np.array(ind_fine, dtype=int)
         indices = np.where((ind_fine[1:] - ind_fine[:-1]) == 1)[0]
 
         # Pick total current within one coarse grid
-        charges_coarse = np.zeros(n_points, dtype=complex) #+ 1j*np.zeros(n_points)
+        charges_coarse = np.zeros(n_points, dtype=complex)
         charges_coarse[ind_fine[0]] = np.sum(charges_fine[np.arange(indices[0])])
         for i in range(1, len(indices)):
             charges_coarse[i + ind_fine[0]] = np.sum(charges_fine[np.arange(indices[i-1],
