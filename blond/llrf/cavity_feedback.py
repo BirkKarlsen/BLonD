@@ -1082,10 +1082,14 @@ class LHCCavityLoop(object):
         self.V_EXC = np.zeros(2 * self.n_coarse, dtype=complex)
         self.V_FB_IN = np.zeros(2 * self.n_coarse, dtype=complex)
         self.V_AC_IN = np.zeros(2 * self.n_coarse, dtype=complex)
-        self.V_COMB_PREV = np.zeros(2 * self.n_coarse, dtype=complex)
+        self.V_AN_IN = np.zeros(2 * self.n_coarse, dtype=complex)
+        self.V_AN_OUT = np.zeros(2 * self.n_coarse, dtype=complex)
+        self.V_DI_OUT = np.zeros(2 * self.n_coarse, dtype=complex)
         self.V_OTFB = np.zeros(2 * self.n_coarse, dtype=complex)
         self.V_OTFB_INT = np.zeros(2 * self.n_coarse, dtype=complex)
         self.V_FIR_OUT = np.zeros(2 * self.n_coarse, dtype=complex)
+        self.V_FB_OUT = np.zeros(2 * self.n_coarse, dtype=complex)
+        self.V_SWAP_OUT = np.zeros(2 * self.n_coarse, dtype=complex)
         self.I_GEN = np.zeros(2 * self.n_coarse, dtype=complex)
         self.I_BEAM = np.zeros(2 * self.n_coarse, dtype=complex)
         self.I_TEST = np.zeros(2 * self.n_coarse, dtype=complex)
@@ -1099,17 +1103,6 @@ class LHCCavityLoop(object):
         self.phi_corr = np.zeros(self.profile.n_slices)
         self.V_ANT_FINE = np.zeros(self.profile.n_slices + 1, dtype=complex)
         self.I_GEN_FINE = np.zeros(self.profile.n_slices + 1, dtype=complex)
-
-        # Scalar variables
-        self.V_a_in_prev = 0
-        self.V_a_out_prev = 0
-        self.V_d_out_prev = 0
-        self.V_fb_in_prev = 0
-        self.V_otfb_prev = 0
-
-        # OTFB v2 implementation
-        self.V_AC1_out_prev = 0
-        self.V_FIR_out_prev = 0
 
         # Pre-track without beam
         self.logger.debug("Track without beam for %d turns", self.n_pretrack)
@@ -1175,7 +1168,7 @@ class LHCCavityLoop(object):
 
         # From V_swap_out in closed loop, constant in open loop
         # TODO: missing terms for changing voltage and beam current
-        self.I_TEST[self.ind] = self.G_gen * self.V_swap_out
+        self.I_TEST[self.ind] = self.G_gen * self.V_SWAP_OUT[self.ind]
         self.I_GEN[self.ind] = self.open_drive * self.I_TEST[self.ind] + \
             self.open_drive_inv * self.I_gen_offset
 
@@ -1190,8 +1183,6 @@ class LHCCavityLoop(object):
         # OTFB itself
         self.V_OTFB_INT[self.ind] = self.alpha*self.V_OTFB_INT[self.ind - self.n_coarse] \
             + self.G_o*(1 - self.alpha)*self.V_AC_IN[self.ind - self.n_coarse + self.n_otfb]
-
-        self.V_COMB_PREV[self.ind] = self.V_AC_IN[self.ind - self.n_coarse + self.n_otfb]
 
         # FIR filter
         self.V_FIR_OUT[self.ind] = self.fir_coeff[0]*self.V_OTFB_INT[self.ind]
@@ -1211,50 +1202,43 @@ class LHCCavityLoop(object):
             self.rf.t_rev[self.counter], lpf=False,
             downsample={'Ts': self.T_s, 'points': self.n_coarse},
             external_reference=True, dT=self.dT)
-        self.I_BEAM_FINE *= -1j * np.exp(1j * np.pi) / self.profile.bin_size
-        self.I_BEAM[-self.n_coarse:] *= -1j * np.exp(1j * np.pi) / self.T_s
+        self.I_BEAM_FINE *= -1j * np.exp(1j * self.rf.phi_s[self.rf.counter[0]]) / self.profile.bin_size
+        self.I_BEAM[-self.n_coarse:] *= -1j * np.exp(1j * self.rf.phi_s[self.rf.counter[0]]) / self.T_s
 
 
     def rf_feedback(self, T_s):
         r'''Analog and digital RF feedback response'''
 
         # Calculate voltage difference to act on
-        self.V_fb_in = (self.V_SET[self.ind - self.n_delay] -
+        self.V_FB_IN[self.ind] = (self.V_SET[self.ind - self.n_delay] -
                         self.open_loop * self.V_ANT[self.ind - self.n_delay])
-        self.V_FB_IN[self.ind] = self.V_fb_in
 
         # On the analog branch, OTFB can contribute
         self.V_AC_IN[self.ind] = (1 - T_s/self.tau_o)*self.V_AC_IN[self.ind-1] + \
             self.V_FB_IN[self.ind] - self.V_FB_IN[self.ind - 1]
         self.one_turn_feedback(T_s=T_s)
 
-        self.V_a_in = self.V_fb_in + self.open_otfb * self.V_OTFB[self.ind] \
+        self.V_AN_IN[self.ind] = self.V_FB_IN[self.ind] + self.open_otfb * self.V_OTFB[self.ind] \
             + int(bool(self.excitation_otfb)) * self.V_EXC[self.ind]
 
         # Output of analog feedback (separate branch)
-        self.V_a_out = self.V_a_out_prev * (1 - T_s / self.tau_a) + \
-            self.G_a * (self.V_a_in - self.V_a_in_prev)
+        self.V_AN_OUT[self.ind] = self.V_AN_OUT[self.ind - 1] * (1 - T_s / self.tau_a) + \
+            self.G_a * (self.V_AN_IN[self.ind] - self.V_AN_IN[self.ind - 1])
 
         # Output of digital feedback (separate branch)
-        self.V_d_out = self.V_d_out_prev * (1 - T_s / self.tau_d) + \
+        self.V_DI_OUT[self.ind] = self.V_DI_OUT[self.ind - 1] * (1 - T_s / self.tau_d) + \
             T_s / self.tau_d * self.G_a * self.G_d * np.exp(1j * self.d_phi_ad) * \
-            self.V_fb_in_prev
+            self.V_FB_IN[self.ind - 1]
 
         # Total output: sum of analog and digital feedback
-        self.V_fb_out = self.open_rffb * (self.V_a_out + self.V_d_out)
-
-        # Update memory
-        self.V_a_in_prev = self.V_a_in
-        self.V_a_out_prev = self.V_a_out
-        self.V_d_out_prev = self.V_d_out
-        self.V_fb_in_prev = self.V_fb_in
+        self.V_FB_OUT[self.ind] = self.open_rffb * (self.V_AN_OUT[self.ind] + self.V_DI_OUT[self.ind])
 
 
     def set_point(self):
         r'''Voltage set point'''
 
         V_set = polar_to_cartesian(self.rf.voltage[0, self.counter]/self.n_cav,
-            self.rf.phi_rf[0, self.counter])
+            self.rf.phi_rf[0, self.counter]) # TODO: check if this make sense
 
         return self.open_drive * V_set * np.ones(self.n_coarse)
 
@@ -1264,7 +1248,7 @@ class LHCCavityLoop(object):
         power above a given input power.'''
 
         # TODO: to be implemented
-        self.V_swap_out = self.V_fb_out
+        self.V_SWAP_OUT[self.ind] = self.V_FB_OUT[self.ind]
 
 
     def tuner(self):
@@ -1294,10 +1278,20 @@ class LHCCavityLoop(object):
         r'''Tracking with beam'''
 
         self.update_variables()
+        self.interpolate_previous_turn()
         self.update_arrays()
         self.update_set_point()
         self.rf_beam_current()
-        self.interpolate_previous_turn()
+        # TODO: remove
+        #plt.figure()
+        #plt.title('set point, abs')
+        #plt.plot(np.abs(self.V_SET))
+
+        #plt.figure()
+        #plt.title('set point, angle')
+        #plt.plot(np.angle(self.V_SET))
+
+        #plt.show()
         self.track_one_turn()
 
         # Find the fine-grid antenna voltage
@@ -1314,7 +1308,7 @@ class LHCCavityLoop(object):
 
         # Calculate OTFB correction w.r.t. RF voltage and phase in RFStation
         self.V_corr /= self.rf.voltage[0, self.rf.counter[0]]
-        self.phi_corr = (self.alpha_sum - np.angle(self.V_SET[-self.n_coarse]))
+        self.phi_corr = (self.alpha_sum - self.rf.phi_rf[0, self.counter])
         self.tuner()
 
 
@@ -1460,12 +1454,22 @@ class LHCCavityLoop(object):
                                     np.zeros(self.n_coarse, dtype=complex)))
         self.V_AC_IN = np.concatenate((self.V_AC_IN[self.n_coarse:],
                                        np.zeros(self.n_coarse, dtype=complex)))
+        self.V_AN_IN = np.concatenate((self.V_AN_IN[self.n_coarse:],
+                                       np.zeros(self.n_coarse, dtype=complex)))
+        self.V_AN_OUT = np.concatenate((self.V_AN_OUT[self.n_coarse:],
+                                       np.zeros(self.n_coarse, dtype=complex)))
+        self.V_DI_OUT = np.concatenate((self.V_DI_OUT[self.n_coarse:],
+                                        np.zeros(self.n_coarse, dtype=complex)))
         self.V_OTFB = np.concatenate((self.V_OTFB[self.n_coarse:],
                                     np.zeros(self.n_coarse, dtype=complex)))
         self.V_OTFB_INT = np.concatenate((self.V_OTFB_INT[self.n_coarse:],
                                     np.zeros(self.n_coarse, dtype=complex)))
         self.V_FIR_OUT = np.concatenate((self.V_FIR_OUT[self.n_coarse:],
                                     np.zeros(self.n_coarse, dtype=complex)))
+        self.V_FB_OUT = np.concatenate((self.V_FB_OUT[self.n_coarse:],
+                                         np.zeros(self.n_coarse, dtype=complex)))
+        self.V_SWAP_OUT = np.concatenate((self.V_SWAP_OUT[self.n_coarse:],
+                                        np.zeros(self.n_coarse, dtype=complex)))
         self.I_BEAM = np.concatenate((self.I_BEAM[self.n_coarse:],
                                      np.zeros(self.n_coarse, dtype=complex)))
         self.I_GEN = np.concatenate((self.I_GEN[self.n_coarse:],
@@ -1487,9 +1491,14 @@ class LHCCavityLoop(object):
         self.V_ANT = np.interp(t_curr, t_prev, self.V_ANT)
         self.V_FB_IN = np.interp(t_curr, t_prev, self.V_FB_IN)
         self.V_AC_IN = np.interp(t_curr, t_prev, self.V_AC_IN)
+        self.V_AN_IN = np.interp(t_curr, t_prev, self.V_AN_IN)
+        self.V_AN_OUT = np.interp(t_curr, t_prev, self.V_AN_OUT)
+        self.V_DI_OUT = np.interp(t_curr, t_prev, self.V_DI_OUT)
         self.V_OTFB = np.interp(t_curr, t_prev, self.V_OTFB)
         self.V_OTFB_INT = np.interp(t_curr, t_prev, self.V_OTFB_INT)
         self.V_FIR_OUT = np.interp(t_curr, t_prev, self.V_FIR_OUT)
+        self.V_FB_OUT = np.interp(t_curr, t_prev, self.V_FB_OUT)
+        self.V_SWAP_OUT = np.interp(t_curr, t_prev, self.V_SWAP_OUT)
         self.I_BEAM = np.interp(t_curr, t_prev, self.I_BEAM)
         self.I_GEN = np.interp(t_curr, t_prev, self.I_GEN)
         self.I_TEST = np.interp(t_curr, t_prev, self.I_TEST)
@@ -1500,8 +1509,11 @@ class LHCCavityLoop(object):
     def update_set_point(self):
         r'''Updates the set point for the next turn based on the design RF
         voltage.'''
-
-        self.V_SET = np.concatenate((self.V_SET[self.n_coarse:],
+        coeff = np.polyfit([0, self.n_coarse + 1],
+                           [self.V_SET[-self.n_coarse], self.set_point()[0]], 1)
+        poly = np.poly1d(coeff)
+        v_set_prev = poly(np.linspace(0, self.n_coarse, self.n_coarse))
+        self.V_SET = np.concatenate((v_set_prev,
                                     self.set_point()))
 
 
@@ -1523,14 +1535,14 @@ class LHCCavityLoop(object):
         # Update the coarse grid sampling
         self.n_coarse = int(round(self.rf.t_rev[self.rf.counter[0]] / self.T_s))
         # Present coarse grid and save previous turn coarse grid
-        self.rf_centers_prev = self.rf_centers
+        self.rf_centers_prev = np.copy(self.rf_centers)
         self.rf_centers = (np.arange(self.n_coarse) + 0.05) * self.T_s + self.dT
         # Sampling time between current and last turn
         self.T_s0 = self.T_res + self.rf_centers[0]
         # Delay time
-        self.n_delay = int(self.tau_loop/self.T_s)
-        self.n_fir = int(0.5 * (self.fir_n_taps - 1))
-        self.n_otfb = int(self.tau_otfb/self.T_s) + self.n_fir
+        self.n_delay = int(round(self.tau_loop/self.T_s))
+        self.n_fir = int(round(0.5 * (self.fir_n_taps - 1)))
+        self.n_otfb = int(round(self.tau_otfb/self.T_s)) + self.n_fir
         # Present rf frequency
         self.omega = self.rf.omega_rf[0, self.rf.counter[0]]
         # Present detuning
