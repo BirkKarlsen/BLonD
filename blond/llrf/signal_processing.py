@@ -17,6 +17,7 @@ from __future__ import division
 import numpy as np
 from scipy.constants import e
 from scipy import signal as sgn
+from scipy.special import comb
 import matplotlib.pyplot as plt
 
 # Set up logging
@@ -428,6 +429,37 @@ def H_cav(x, n_sections, x_prev=None):
     resp = sgn.fftconvolve(x, h, mode='full')[-x.shape[0]:]
 
     return resp[:x.shape[0] - h.shape[0] + 1]
+
+
+def smooth_step(x, x_min=0, x_max=1, N=1):
+    """Function to make a smooth step.
+
+    Parameters
+    ----------
+    x : float array
+        Data to be smoothed
+    x_min : float
+        Minimum output value of step
+    x_max : float
+        Maximum output value of step
+    N : int
+        Order of smoothness
+
+    Returns
+    -------
+    float array
+        Smooth step of input signal
+    Taken from: https://stackoverflow.com/questions/45165452/how-to-implement-a-smooth-clamp-function-in-python
+    """
+    x = np.clip((x - x_min) / (x_max - x_min), 0, 1)
+
+    result = 0
+    for n in range(0, N + 1):
+        result += comb(N + n, n) * comb(2 * N + 1, N - n) * (-x) ** n
+
+    result *= x ** (N + 1)
+
+    return result
 
 
 def feedforward_filter(TWC: TravellingWaveCavity, T_s, debug=False, taps=None,

@@ -31,7 +31,7 @@ from blond.llrf.impulse_response import SPS3Section200MHzTWC, \
     SPS4Section200MHzTWC, SPS5Section200MHzTWC
 from blond.llrf.signal_processing import feedforward_filter_TWC3_1, feedforward_filter_TWC3_2, \
     feedforward_filter_TWC3_3, feedforward_filter_TWC4_1, feedforward_filter_TWC4_2, \
-    feedforward_filter_TWC4_3, feedforward_filter_TWC5
+    feedforward_filter_TWC4_3, feedforward_filter_TWC5, smooth_step
 from blond.utils import bmath as bm
 
 
@@ -921,8 +921,8 @@ class LHCRFFeedback(object):
     '''
 
     def __init__(self, alpha=15/16, d_phi_ad=0, G_a=0.00001, G_d=10, G_o=10,
-                 tau_a=170e-6, tau_d=400e-6, tau_o=110e-6, mu=-0.0001, open_drive=False,
-                 open_loop=False, open_otfb=False, open_rffb=False, open_tuner=False,
+                 tau_a=170e-6, tau_d=400e-6, tau_o=110e-6, mu=-0.0001, power_thres=300e3, open_drive=False,
+                 open_loop=False, open_otfb=False, open_rffb=False, open_tuner=False, clamping=False,
                  excitation=False, excitation_otfb_1=False,
                  excitation_otfb_2=False, seed1=1234, seed2=7564):
 
@@ -936,6 +936,7 @@ class LHCRFFeedback(object):
         self.tau_d = tau_d
         self.tau_o = tau_o
         self.mu = mu
+        self.power_thres = power_thres
         self.excitation = excitation
         self.excitation_otfb_1 = excitation_otfb_1
         self.excitation_otfb_2 = excitation_otfb_2
@@ -949,6 +950,7 @@ class LHCRFFeedback(object):
         self.open_otfb = int(np.invert(bool(open_otfb)))
         self.open_rffb = int(np.invert(bool(open_rffb)))
         self.open_tuner = int(np.invert(bool(open_tuner)))
+        self.clamping = clamping
 
 
     def generate_white_noise(self, n_points):
@@ -1046,6 +1048,7 @@ class LHCCavityLoop(object):
         self.open_otfb = self.RFFB.open_otfb
         self.open_rffb = self.RFFB.open_rffb
         self.open_tuner = self.RFFB.open_tuner
+        self.clamping = self.RFFB.clamping
         self.alpha = self.RFFB.alpha
         self.d_phi_ad = self.RFFB.d_phi_ad
         self.G_a = self.RFFB.G_a
@@ -1055,6 +1058,8 @@ class LHCCavityLoop(object):
         self.tau_d = self.RFFB.tau_d
         self.tau_o = self.RFFB.tau_o
         self.mu = self.RFFB.mu
+        self.power_thres = self.RFFB.power_thres
+        self.v_swap_thres = np.sqrt(2 * self.power_thres / (self.R_over_Q * self.Q_L)) / self.G_gen
         self.excitation = self.RFFB.excitation
         self.excitation_otfb_1 = self.RFFB.excitation_otfb_1
         self.excitation_otfb_2 = self.RFFB.excitation_otfb_2
@@ -1247,8 +1252,13 @@ class LHCCavityLoop(object):
         r'''Model of the Switch and Protect module: clamping of the output
         power above a given input power.'''
 
-        # TODO: to be implemented
-        self.V_SWAP_OUT[self.ind] = self.V_FB_OUT[self.ind]
+        # TODO: check implementation
+        if self.clamping:
+            self.V_SWAP_OUT[self.ind] = self.v_swap_thres * smooth_step(np.abs(self.V_FB_OUT[self.ind]),
+                                                                        x_max=self.v_swap_thres, N=0) * \
+                np.exp(1j * np.angle(self.V_FB_OUT[self.ind]))
+        else:
+            self.V_SWAP_OUT[self.ind] = self.V_FB_OUT[self.ind]
 
 
     def tuner(self):
@@ -1282,16 +1292,6 @@ class LHCCavityLoop(object):
         self.update_arrays()
         self.update_set_point()
         self.rf_beam_current()
-        # TODO: remove
-        #plt.figure()
-        #plt.title('set point, abs')
-        #plt.plot(np.abs(self.V_SET))
-
-        #plt.figure()
-        #plt.title('set point, angle')
-        #plt.plot(np.angle(self.V_SET))
-
-        #plt.show()
         self.track_one_turn()
 
         # Find the fine-grid antenna voltage
