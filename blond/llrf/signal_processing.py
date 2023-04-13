@@ -195,7 +195,13 @@ def rf_beam_current(Profile, omega_c, T_rev, lpf=True, downsample=None, external
         # slippage in phase due to a non-integer harmonic number
         dphi = dT * omega_c     # TODO: check that this makes sense
         # Total phase correction
-        phase = np.angle(charges_fine)[0] - np.pi * add_corr + dphi
+        phase = - (np.pi) * add_corr + dphi
+        charges_fine = charges_fine * np.exp(-1j * phase)
+    else:
+        # slippage in phase due to a non-integer harmonic number
+        dphi = dT * omega_c  # TODO: check that this makes sense
+        # Total phase correction
+        phase = dphi
         charges_fine = charges_fine * np.exp(-1j * phase)
 
     if downsample:

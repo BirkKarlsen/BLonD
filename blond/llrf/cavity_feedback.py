@@ -1206,7 +1206,7 @@ class LHCCavityLoop(object):
         self.I_BEAM_FINE, self.I_BEAM[-self.n_coarse:] = rf_beam_current(self.profile, self.omega,
             self.rf.t_rev[self.counter], lpf=False,
             downsample={'Ts': self.T_s, 'points': self.n_coarse},
-            external_reference=True, dT=self.dT)
+            external_reference=False, dT=self.dT)
         self.I_BEAM_FINE *= -1j * np.exp(1j * self.rf.phi_s[self.rf.counter[0]]) / self.profile.bin_size
         self.I_BEAM[-self.n_coarse:] *= -1j * np.exp(1j * self.rf.phi_s[self.rf.counter[0]]) / self.T_s
 
