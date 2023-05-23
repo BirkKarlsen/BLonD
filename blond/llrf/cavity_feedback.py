@@ -29,7 +29,7 @@ from blond.llrf.signal_processing import comb_filter, cartesian_to_polar,\
     rf_beam_current, moving_average_improved, fir_filter_lhc_otfb_coeff, smooth_step
 from blond.llrf.impulse_response import SPS3Section200MHzTWC, \
     SPS4Section200MHzTWC, SPS5Section200MHzTWC
-from blond.llrf.impulse_response import feedforward_filter_TWC3_1, feedforward_filter_TWC3_2, \
+from blond.llrf.signal_processing import feedforward_filter_TWC3_1, feedforward_filter_TWC3_2, \
     feedforward_filter_TWC3_3, feedforward_filter_TWC4_1, feedforward_filter_TWC4_2, \
     feedforward_filter_TWC4_3, feedforward_filter_TWC5
 from blond.utils import bmath as bm
