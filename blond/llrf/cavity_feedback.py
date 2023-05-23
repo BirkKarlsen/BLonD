@@ -26,12 +26,12 @@ import sys
 
 from blond.llrf.signal_processing import comb_filter, cartesian_to_polar,\
     polar_to_cartesian, modulator, moving_average,\
-    rf_beam_current, moving_average_improved, fir_filter_lhc_otfb_coeff
+    rf_beam_current, moving_average_improved, fir_filter_lhc_otfb_coeff, smooth_step
 from blond.llrf.impulse_response import SPS3Section200MHzTWC, \
     SPS4Section200MHzTWC, SPS5Section200MHzTWC
-from blond.llrf.signal_processing import feedforward_filter_TWC3_1, feedforward_filter_TWC3_2, \
+from blond.llrf.impulse_response import feedforward_filter_TWC3_1, feedforward_filter_TWC3_2, \
     feedforward_filter_TWC3_3, feedforward_filter_TWC4_1, feedforward_filter_TWC4_2, \
-    feedforward_filter_TWC4_3, feedforward_filter_TWC5, smooth_step
+    feedforward_filter_TWC4_3, feedforward_filter_TWC5
 from blond.utils import bmath as bm
 
 
@@ -455,9 +455,9 @@ class SPSOneTurnFeedback(object):
         self.omega_r = self.TWC.omega_r
         # Length of arrays in LLRF
         self.n_coarse = int(round(self.rf.t_rev[0]/self.rf.t_rf[0, 0]))
+        self.n_coarse_FF = int(self.n_coarse / 5)
         # Initialize turn-by-turn variables
         self.dphi_mod = 0
-        self.update_variables()
 
         # Check array length for set point modulation
         if self.set_point_modulation:
@@ -520,7 +520,6 @@ class SPSOneTurnFeedback(object):
         # Initialise feed-forward; sampled every fifth bucket
         if self.open_FF == 1:
             self.logger.debug('Feed-forward active')
-            self.n_coarse_FF = int(self.n_coarse/5)
             self.I_BEAM_COARSE_FF = np.zeros(2 * self.n_coarse_FF, dtype=complex)
             self.I_BEAM_COARSE_FF_MOD = np.zeros(2 * self.n_coarse_FF, dtype=complex)
             self.I_FF_CORR_MOD = np.zeros(2 * self.n_coarse_FF, dtype=complex)
@@ -528,6 +527,7 @@ class SPSOneTurnFeedback(object):
             self.I_FF_CORR = np.zeros(2 * self.n_coarse_FF, dtype=complex)
             self.V_FF_CORR = np.zeros(2 * self.n_coarse_FF, dtype=complex)
 
+        self.update_variables()
         self.logger.info("Class initialized")
 
 
@@ -648,13 +648,15 @@ class SPSOneTurnFeedback(object):
             I_COARSE_BEAM_RESHAPED = I_COARSE_BEAM_RESHAPED.reshape((self.n_coarse_FF, self.n_coarse//self.n_coarse_FF))
             self.I_BEAM_COARSE_FF[-self.n_coarse_FF:] = np.sum(I_COARSE_BEAM_RESHAPED, axis=1) / 5
 
+            self.TWC.impulse_response_ffwd(self.omega_c, self.rf_centers[::5])
+
             # Do a down-modulation to the resonant frequency of the TWC
             self.I_BEAM_COARSE_FF_MOD[:self.n_coarse_FF] = self.I_BEAM_COARSE_FF_MOD[-self.n_coarse_FF:]
             # TODO: RF centers note taken into for modulation?
             self.I_BEAM_COARSE_FF_MOD[-self.n_coarse_FF:] = modulator(self.I_BEAM_COARSE_FF[-self.n_coarse_FF:],
-                                                                  omega_i=self.omega_c, omega_f=self.omega_r,
-                                                                  T_sampling= 5 * self.T_s,
-                                                                  phi_0=(self.dphi_mod + self.rf.dphi_rf[0]))
+                                                                      omega_i=self.omega_c, omega_f=self.omega_r,
+                                                                      T_sampling=5 * self.T_s,
+                                                                      phi_0=(self.dphi_mod + self.rf.dphi_rf[0]))
 
             self.I_FF_CORR[:self.n_coarse_FF] = self.I_FF_CORR[-self.n_coarse_FF:]
             self.I_FF_CORR[-self.n_coarse_FF:] = np.zeros(self.n_coarse_FF)
@@ -668,13 +670,16 @@ class SPSOneTurnFeedback(object):
             self.I_FF_CORR_MOD[:self.n_coarse_FF] = self.I_FF_CORR_MOD[-self.n_coarse_FF:]
             # TODO: RF centers note taken into for modulation?
             self.I_FF_CORR_MOD[-self.n_coarse_FF:] = modulator(self.I_FF_CORR[-self.n_coarse_FF:],
-                                                           omega_i=self.omega_r, omega_f=self.omega_c,
-                                                           T_sampling= 5 * self.T_s,
-                                                           phi_0=-(self.dphi_mod + self.rf.dphi_rf[0] + phi_delay))
+                                                               omega_i=self.omega_r, omega_f=self.omega_c,
+                                                               T_sampling=5 * self.T_s,
+                                                               phi_0=-(self.dphi_mod + self.rf.dphi_rf[0]
+                                                                       + phi_delay))
+
 
             # Compensate for FIR filter delay
             self.I_FF_CORR_DEL[:self.n_coarse_FF] = self.I_FF_CORR_DEL[-self.n_coarse_FF:]
-            self.I_FF_CORR_DEL[-self.n_coarse_FF:] = self.I_FF_CORR_MOD[self.n_FF_delay:self.n_FF_delay - self.n_coarse_FF]
+            self.I_FF_CORR_DEL[-self.n_coarse_FF:] = self.I_FF_CORR_MOD[self.n_FF_delay:self.n_FF_delay -
+                                                                                    self.n_coarse_FF]
 
     # INDIVIDUAL COMPONENTS ---------------------------------------------------
 
@@ -867,8 +872,8 @@ class SPSOneTurnFeedback(object):
     # Power related functions
     def calc_power(self):
         r'''Method to compute the generator power'''
-        self.II_COARSE_GEN = np.copy(self.I_GEN)
-        self.P_GEN = get_power_gen_I2(self.II_COARSE_GEN, 50)
+
+        return get_power_gen_I2(np.copy(self.I_GEN), 50)
 
     def wo_clamping(self):
         pass

@@ -210,7 +210,7 @@ class TravellingWaveCavity(object):
 
     """
 
-    def __init__(self, l_cell, N_cells, rho, v_g, omega_r, df = 0):
+    def __init__(self, l_cell, N_cells, rho, v_g, omega_r, df=0):
 
         self.l_cell = float(l_cell)
         self.N_cells = int(N_cells)
