@@ -1160,7 +1160,7 @@ class LHCCavityLoop(object):
                          (self.profile.n_slices + 1, self.profile.n_slices + 1), dtype=complex, format='csc')
         I_matrix = diags([A], [-1], (self.profile.n_slices + 1, self.profile.n_slices + 1), dtype=complex)
 
-        # Find vector on the "currrent" side of the equation
+        # Find vector on the "current" side of the equation
         b = I_matrix.dot(2 * self.I_GEN_FINE - self.I_BEAM_FINE)
         b[0] = V_A_init
 
@@ -1212,8 +1212,10 @@ class LHCCavityLoop(object):
             self.rf.t_rev[self.counter], lpf=False,
             downsample={'Ts': self.T_s, 'points': self.n_coarse},
             external_reference=False, dT=self.dT)
-        self.I_BEAM_FINE *= -1j * np.exp(1j * self.rf.phi_s[self.rf.counter[0]]) / self.profile.bin_size
-        self.I_BEAM[-self.n_coarse:] *= -1j * np.exp(1j * self.rf.phi_s[self.rf.counter[0]]) / self.T_s
+        self.I_BEAM_FINE *= -1j * np.exp(1j * (self.rf.phi_s[self.rf.counter[0]] +
+                                               self.dT * self.omega * 2)) / self.profile.bin_size
+        self.I_BEAM[-self.n_coarse:] *= -1j * np.exp(1j * (self.rf.phi_s[self.rf.counter[0]] +
+                                                     self.dT * self.omega * 2)) / self.T_s
 
 
     def rf_feedback(self, T_s):
@@ -1247,8 +1249,7 @@ class LHCCavityLoop(object):
     def set_point(self):
         r'''Voltage set point'''
 
-        V_set = polar_to_cartesian(self.rf.voltage[0, self.counter]/self.n_cav,
-            self.rf.phi_rf[0, self.counter]) # TODO: check if this make sense
+        V_set = polar_to_cartesian(self.rf.voltage[0, self.counter]/self.n_cav, 0)
 
         return self.open_drive * V_set * np.ones(self.n_coarse)
 
@@ -1293,7 +1294,6 @@ class LHCCavityLoop(object):
         r'''Tracking with beam'''
 
         self.update_variables()
-        self.interpolate_previous_turn()
         self.update_arrays()
         self.update_set_point()
         self.rf_beam_current()
@@ -1313,7 +1313,7 @@ class LHCCavityLoop(object):
 
         # Calculate OTFB correction w.r.t. RF voltage and phase in RFStation
         self.V_corr /= self.rf.voltage[0, self.rf.counter[0]]
-        self.phi_corr = (self.alpha_sum - self.rf.phi_rf[0, self.counter])
+        self.phi_corr = self.alpha_sum
         self.tuner()
 
 
@@ -1452,7 +1452,6 @@ class LHCCavityLoop(object):
         r'''Moves the array indices by one turn (n_coarse points) from the
         present turn to prepare the next turn. All arrays except for V_SET.'''
 
-        # TODO: update n_coarse and array sizes
         self.V_ANT = np.concatenate((self.V_ANT[self.n_coarse:],
                                     np.zeros(self.n_coarse, dtype=complex)))
         self.V_FB_IN = np.concatenate((self.V_FB_IN[self.n_coarse:],
