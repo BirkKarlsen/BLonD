@@ -70,7 +70,7 @@ def cartesian_to_polar(IQ_vector):
     return np.absolute(IQ_vector), np.angle(IQ_vector)
 
 
-def modulator(signal, omega_i, omega_f, T_sampling, phi_0=0):
+def modulator(signal, omega_i, omega_f, T_sampling, phi_0=0, dt=0):
     """Demodulate a signal from initial frequency to final frequency. The two
     frequencies should be close.
 
@@ -96,7 +96,7 @@ def modulator(signal, omega_i, omega_f, T_sampling, phi_0=0):
         #TypeError
         raise RuntimeError("ERROR in filters.py/demodulator: signal should" +
                            " be an array!")
-    delta_phi = (omega_i - omega_f) * T_sampling * np.arange(len(signal))
+    delta_phi = (omega_i - omega_f) * (T_sampling * np.arange(len(signal)) + dt)
     # Pre compute sine and cosine for speed up
     cs = np.cos(delta_phi + phi_0)
     sn = np.sin(delta_phi + phi_0)
@@ -187,22 +187,11 @@ def rf_beam_current(Profile, omega_c, T_rev, lpf=True, downsample=None, external
 
     charges_fine = I_f + 1j*Q_f
     if external_reference:
-        # Phase correction
-        bucket = 2 * np.pi/(omega_c)
-        # This term takes into account where the sampling of the profile starts
-        add_corr = Profile.bin_centers[0] / (bucket/2) - int(round(Profile.bin_centers[0] / (bucket/2))) \
-                   - Profile.bin_size / bucket
         # slippage in phase due to a non-integer harmonic number
-        dphi = dT * omega_c     # TODO: check that this makes sense
-        # Total phase correction
-        phase = - (np.pi) * add_corr + dphi
-        charges_fine = charges_fine * np.exp(-1j * phase)
-    else:
-        # slippage in phase due to a non-integer harmonic number
-        dphi = dT * omega_c  # TODO: check that this makes sense
+        dphi = dT * omega_c
         # Total phase correction
         phase = dphi
-        charges_fine = charges_fine * np.exp(-1j * phase)
+        charges_fine = charges_fine * np.exp(1j * phase)
 
     if downsample:
         try:
@@ -212,7 +201,7 @@ def rf_beam_current(Profile, omega_c, T_rev, lpf=True, downsample=None, external
             raise RuntimeError('Downsampling input erroneous in rf_beam_current')
 
         # Find which index in fine grid matches index in coarse grid
-        ind_fine = np.round((Profile.bin_centers + dT)/T_s)
+        ind_fine = np.round((Profile.bin_centers + dT - np.pi / omega_c)/T_s)
         ind_fine = np.array(ind_fine, dtype=int)
         indices = np.where((ind_fine[1:] - ind_fine[:-1]) == 1)[0]
 
