@@ -147,7 +147,6 @@ class SPSCavityFeedback(object):
                  a_comb=None, turns=1000, post_LS2=True, V_part=None, df=0,
                  Commissioning=CavityFeedbackCommissioning()):
 
-
         # Options for commissioning the feedback
         self.Commissioning = Commissioning
         self.rot_IQ = Commissioning.rot_IQ
@@ -453,6 +452,7 @@ class SPSOneTurnFeedback(object):
 
         # TWC resonant frequency
         self.omega_r = self.TWC.omega_r
+        self.omega_c = self.rf.omega_rf[0, self.rf.counter[0]]
         # Length of arrays in LLRF
         self.n_coarse = int(round(self.rf.t_rev[0]/self.rf.t_rf[0, 0]))
         self.n_coarse_FF = int(self.n_coarse / 5)
@@ -516,6 +516,12 @@ class SPSOneTurnFeedback(object):
         # Initialize induced beam voltage coarse and fine
         self.V_IND_FINE_BEAM = np.zeros(2 * self.profile.n_slices, dtype=complex)
         self.V_IND_COARSE_BEAM = np.zeros(2 * self.n_coarse, dtype=complex)
+
+        # RF centers
+        self.T_s = 2 * np.pi / self.rf.omega_rf[0, self.rf.counter[0]]
+        self.dT = 0
+        self.T_res = 0
+        self.rf_centers = (np.arange(self.n_coarse) + 0.5) * self.T_s + self.dT
 
         # Initialise feed-forward; sampled every fifth bucket
         if self.open_FF == 1:
@@ -627,7 +633,7 @@ class SPSOneTurnFeedback(object):
         self.I_FINE_BEAM[-self.profile.n_slices:], self.I_COARSE_BEAM[-self.n_coarse:] = \
                 rf_beam_current(self.profile, self.omega_c, self.rf.t_rev[self.counter],
                                 lpf=lpf, downsample={'Ts': self.T_s, 'points': self.n_coarse},
-                                external_reference=True)
+                                external_reference=True, dT=self.dT)
 
         self.I_FINE_BEAM[-self.profile.n_slices:] = self.rot_IQ * self.I_FINE_BEAM[-self.profile.n_slices:] / \
                                                     self.profile.bin_size
@@ -691,7 +697,7 @@ class SPSOneTurnFeedback(object):
         # Read RF voltage from rf object
         self.V_set = polar_to_cartesian(
             self.V_part * self.rf.voltage[0, self.counter],
-            -0.5 * np.pi + self.rf.phi_rf[0, self.counter] + np.angle(self.rot_IQ))
+            -0.5 * np.pi + self.rf.phi_rf[0, self.counter] * 0 + np.angle(self.rot_IQ))
 
         # Convert to array
         self.V_SET[:self.n_coarse] = self.V_SET[-self.n_coarse:]
@@ -752,9 +758,9 @@ class SPSOneTurnFeedback(object):
         # Note here that dphi_rf is already accumulated somewhere else (i.e. in the tracker).
         # TODO: RF centers note taken into for modulation?
         self.DV_MOD_FR[-self.n_coarse:] = modulator(self.DV_DELAYED[-self.n_coarse:],
-                                                    self.omega_c, self.omega_r,
-                                                    self.rf.t_rf[0, self.counter],
-                                                    phi_0=(self.dphi_mod + self.rf.dphi_rf[0]))
+                                                    self.omega_c, self.omega_r, self.T_s,
+                                                    phi_0=self.dphi_mod,
+                                                    dt=self.dT)
 
 
     def mov_avg(self):
@@ -775,10 +781,9 @@ class SPSOneTurnFeedback(object):
         # TODO: RF centers note taken into for modulation?
         dphi_demod = (self.omega_r - self.omega_c) * self.TWC.tau#* self.T_s * (self.n_mov_av - 1)/2
         self.DV_MOD_FRF[-self.n_coarse:] = self.open_FB * modulator(self.DV_MOV_AVG[-self.n_coarse:],
-                                                                    self.omega_r, self.omega_c,
-                                                                    self.rf.t_rf[0, self.counter],
-                                                                    phi_0=-(self.dphi_mod + self.rf.dphi_rf[0]
-                                                                            + dphi_demod))
+                                                                    self.omega_r, self.omega_c, self.T_s,
+                                                                    phi_0=-(self.dphi_mod + dphi_demod),
+                                                                    dt=self.dT)
 
 
     def sum_and_gain(self):
@@ -851,23 +856,29 @@ class SPSOneTurnFeedback(object):
         # Present time step
         self.counter = self.rf.counter[0]
         # Present carrier frequency: main RF frequency
+        self.omega_c_prev = self.omega_c
         self.omega_c = self.rf.omega_rf[0, self.counter]
         # Present sampling time
-        self.T_s = self.rf.t_rf[0, self.counter]
+        self.T_s_prev = self.T_s
+        self.T_s = 2 * np.pi / self.rf.omega_rf[0, self.counter]
+        # Update the coarse grid sampling
+        self.n_coarse = int(round(self.rf.t_rev[self.rf.counter[0]] / self.T_s))
         # Phase offset at the end of a 1-turn modulated signal (for demodulated, multiply by -1 as c and r reversed)
-        self.phi_mod_0 = (self.omega_c - self.omega_r) * self.T_s * (self.n_coarse) % (2 * np.pi)
+        self.phi_mod_0 = (self.omega_c_prev - self.omega_r) * (self.T_s_prev * self.n_coarse) % (2 * np.pi)
         self.dphi_mod += self.phi_mod_0
-        # Present coarse grid
-        self.rf_centers = (np.arange(self.n_coarse) + 0.5) * self.T_s
-        # Check number of samples required per turn
-        n_coarse = int(round(self.rf.t_rev[self.counter]/self.T_s))
-        if self.n_coarse != n_coarse:
-            raise RuntimeError("Error in SPSOneTurnFeedback: changing number" +
-                " of coarse samples. This option isnot yet implemented!")
+        self.dphi_mod = self.dphi_mod % (2 * np.pi)
+        # Present coarse grid and save previous turn coarse grid
+        self.rf_centers_prev = np.copy(self.rf_centers)
+        self.rf_centers = (np.arange(self.n_coarse) + 0.5) * self.T_s + self.dT
+        # Sampling time between current and last turn
+        self.T_s0 = self.T_res + self.rf_centers[0]
         # Present delay time
         self.n_mov_av = int(self.TWC.tau / self.rf.t_rf[0, self.counter])
         self.n_delay = self.n_coarse - self.n_mov_av
-
+        # Left over RF bucket from turn current turn
+        self.T_res = self.rf.t_rev[self.rf.counter[0]] - self.rf_centers[-1]
+        # Residual part of last turn entering the current turn due to non-integer harmonic number
+        self.dT = 0.5 * self.T_s - self.T_res % self.T_s
 
     # Power related functions
     def calc_power(self):
@@ -1211,11 +1222,9 @@ class LHCCavityLoop(object):
         self.I_BEAM_FINE, self.I_BEAM[-self.n_coarse:] = rf_beam_current(self.profile, self.omega,
             self.rf.t_rev[self.counter], lpf=False,
             downsample={'Ts': self.T_s, 'points': self.n_coarse},
-            external_reference=False, dT=self.dT)
-        self.I_BEAM_FINE *= -1j * np.exp(1j * (self.rf.phi_s[self.rf.counter[0]] +
-                                               self.dT * self.omega * 2)) / self.profile.bin_size
-        self.I_BEAM[-self.n_coarse:] *= -1j * np.exp(1j * (self.rf.phi_s[self.rf.counter[0]] +
-                                                     self.dT * self.omega * 2)) / self.T_s
+            external_reference=True, dT=self.dT)
+        self.I_BEAM_FINE *= -1j * np.exp(1j * (self.rf.phi_s[self.rf.counter[0]])) / self.profile.bin_size
+        self.I_BEAM[-self.n_coarse:] *= -1j * np.exp(1j * (self.rf.phi_s[self.rf.counter[0]])) / self.T_s
 
 
     def rf_feedback(self, T_s):
