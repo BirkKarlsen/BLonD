@@ -14,11 +14,7 @@
 '''
 
 from __future__ import division
-import numpy as np
-from scipy.constants import e
-from scipy import signal as sgn
 from scipy.special import comb
-import matplotlib.pyplot as plt
 from blond.llrf.impulse_response import TravellingWaveCavity
 
 # Set up logging
