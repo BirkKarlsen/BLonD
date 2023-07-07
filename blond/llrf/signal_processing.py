@@ -153,6 +153,10 @@ def rf_beam_current(Profile, omega_c, T_rev, lpf=True, downsample=None, external
         Dictionary containing float value for 'Ts' sampling time and int value
         for 'points'. Will downsample the RF beam charge onto a coarse time
         grid with 'Ts' sampling time and 'points' points.
+    external_reference : bool
+        Option to include the changing external reference of the time-grid
+    dT : float
+        The shift in time due to shifting reference frames
 
     Returns
     -------
@@ -398,6 +402,7 @@ def moving_average_improved(x, N, x_prev=None):
     mov_avg = sgn.fftconvolve(x, (1/N)*np.ones(N), mode='full')[-x.shape[0]:]
 
     return mov_avg[:x.shape[0] - N + 1]
+
 
 def H_cav(x, n_sections, x_prev=None):
 

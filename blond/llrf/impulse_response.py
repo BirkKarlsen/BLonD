@@ -10,7 +10,7 @@
 '''
 **Filters and methods for control loops**
 
-:Authors: **Helga Timko**
+:Authors: **Birk Emil Karlsen-Baeck**, **Helga Timko**
 '''
 
 from __future__ import division
@@ -110,7 +110,7 @@ def triangle(t, tau):
     return y
 
 
-class TravellingWaveCavity(object):
+class TravellingWaveCavity:
     r"""Impulse responses of a travelling wave cavity. The induced voltage
     :math:`V(t)` from the impulse response :math:`h(t)` and the I,Q (cavity or
     generator) current :math:`I(t)` can be written in matrix form,
@@ -218,7 +218,7 @@ class TravellingWaveCavity(object):
         if v_g > 0 and v_g < 1:
             self.v_g = float(v_g)
         else:
-            #ImpulseError
+            # ImpulseError
             raise RuntimeError("ERROR in TravellingWaveCavity: group" +
                                " velocity out of limits (0,1)!")
         self.omega_r = float(omega_r) + 2 * np.pi * float(df)
@@ -283,7 +283,7 @@ class TravellingWaveCavity(object):
 
         # Impulse response if not on carrier frequency
         if np.fabs((self.d_omega)/self.omega_r) > 1e-12:
-            self.h_gen = self.h_gen.real*(np.cos(self.d_omega*t_gen) -          # TODO: Introduced a plus here
+            self.h_gen = self.h_gen.real*(np.cos(self.d_omega*t_gen) -
                                           1j*np.sin(self.d_omega*t_gen))
 
     def impulse_response_beam(self, omega_c, time_fine, time_coarse=None):
@@ -332,7 +332,7 @@ class TravellingWaveCavity(object):
 
         # Impulse response if not on carrier frequency
         if np.fabs((self.d_omega)/self.omega_r) > 1e-12:
-            self.h_beam = self.h_beam.real*(np.cos(self.d_omega*t_beam) -           # TODO: Introduced a plus here
+            self.h_beam = self.h_beam.real*(np.cos(self.d_omega*t_beam) -
                                             1j*np.sin(self.d_omega*t_beam))
 
         if time_coarse is not None:
@@ -346,7 +346,7 @@ class TravellingWaveCavity(object):
             # Impulse response if not on carrier frequency
             if np.fabs((self.d_omega)/self.omega_r) > 1e-12:
                 self.h_beam_coarse = self.h_beam_coarse.real* \
-                                     (np.cos(self.d_omega*t_beam) -                 # TODO: Introduced a plus here
+                                     (np.cos(self.d_omega*t_beam) -
                                       1j*np.sin(self.d_omega*t_beam))
 
     def compute_wakes(self, time):
