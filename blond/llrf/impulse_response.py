@@ -10,7 +10,7 @@
 '''
 **Filters and methods for control loops**
 
-:Authors: **Helga Timko**
+:Authors: **Birk Emil Karlsen-Baeck**, **Helga Timko**
 '''
 
 from __future__ import division
@@ -282,9 +282,9 @@ class TravellingWaveCavity:
                       rectangle(t_gen - 0.5 * self.tau, self.tau)).astype(np.complex128)
 
         # Impulse response if not on carrier frequency
-        if np.fabs((self.d_omega) / self.omega_r) > 1e-12:
-            self.h_gen = self.h_gen.real * (np.cos(self.d_omega * t_gen) -          # TODO: Introduced a plus here
-                                            1j * np.sin(self.d_omega * t_gen))
+        if np.fabs((self.d_omega)/self.omega_r) > 1e-12:
+            self.h_gen = self.h_gen.real*(np.cos(self.d_omega*t_gen) -
+                                          1j*np.sin(self.d_omega*t_gen))
 
     def impulse_response_beam(self, omega_c, time_fine, time_coarse=None):
         r"""Impulse response from the cavity towards the beam. For a signal
@@ -331,9 +331,9 @@ class TravellingWaveCavity:
                        triangle(t_beam, self.tau)).astype(np.complex128)
 
         # Impulse response if not on carrier frequency
-        if np.fabs((self.d_omega) / self.omega_r) > 1e-12:
-            self.h_beam = self.h_beam.real * (np.cos(self.d_omega * t_beam) -           # TODO: Introduced a plus here
-                                              1j * np.sin(self.d_omega * t_beam))
+        if np.fabs((self.d_omega)/self.omega_r) > 1e-12:
+            self.h_beam = self.h_beam.real*(np.cos(self.d_omega*t_beam) -
+                                            1j*np.sin(self.d_omega*t_beam))
 
         if time_coarse is not None:
             # Move starting point of impulse response to correct value
@@ -344,10 +344,10 @@ class TravellingWaveCavity:
                                   triangle(t_beam, self.tau)).astype(np.complex128)
 
             # Impulse response if not on carrier frequency
-            if np.fabs((self.d_omega) / self.omega_r) > 1e-12:
-                self.h_beam_coarse = self.h_beam_coarse.real * \
-                    (np.cos(self.d_omega * t_beam) -                 # TODO: Introduced a plus here
-                     1j * np.sin(self.d_omega * t_beam))
+            if np.fabs((self.d_omega)/self.omega_r) > 1e-12:
+                self.h_beam_coarse = self.h_beam_coarse.real* \
+                                     (np.cos(self.d_omega*t_beam) -
+                                      1j*np.sin(self.d_omega*t_beam))
 
     def compute_wakes(self, time):
         r"""Computes the wake fields towards the beam and generator on the
@@ -382,7 +382,7 @@ class SPS3Section200MHzTWC(TravellingWaveCavity):
     def __init__(self, df=0):
 
         TravellingWaveCavity.__init__(self, 0.374, 32, 2.71e4, 0.0946,
-                                      2 * np.pi * 200.03766667e6, df=df)
+                                      2*np.pi*200.03766667e6, df=df)
 
 
 class SPS4Section200MHzTWC(TravellingWaveCavity):
@@ -390,7 +390,7 @@ class SPS4Section200MHzTWC(TravellingWaveCavity):
     def __init__(self, df=0):
 
         TravellingWaveCavity.__init__(self, 0.374, 43, 2.71e4, 0.0946,
-                                      2 * np.pi * 199.9945e6, df=df)
+                                      2*np.pi*199.9945e6, df=df)
 
 
 class SPS5Section200MHzTWC(TravellingWaveCavity):
@@ -398,4 +398,4 @@ class SPS5Section200MHzTWC(TravellingWaveCavity):
     def __init__(self, df=0):
 
         TravellingWaveCavity.__init__(self, 0.374, 54, 2.71e4, 0.0946,
-                                      2 * np.pi * 200.1e6, df=df)
+                                      2*np.pi*200.1e6, df=df)
