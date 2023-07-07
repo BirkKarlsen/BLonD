@@ -13,12 +13,12 @@
 :Authors: **Danilo Quartullo**, **Helga Timko**
 '''
 
-from builtins import object
+
 import h5py as hp
 import numpy as np
+import os
 
-
-class BunchMonitor(object):
+class BunchMonitor:
 
     ''' Class able to save bunch data into h5 file. Use 'buffer_time' to select 
         the frequency of saving to file in number of turns.
@@ -35,13 +35,13 @@ class BunchMonitor(object):
         self.n_turns = Ring.n_turns
         self.i_turn = 0
         self.buffer_time = buffer_time
-        if buffer_time == None:
+        if buffer_time is None:
             self.buffer_time = self.n_turns
         self.rf_params = RFParameters
         self.beam = Beam
         self.profile = Profile
         if self.profile:
-            if self.profile.fit_option != None:
+            if self.profile.fit_option is not None:
                 self.fit_option = True
             else:
                 self.fit_option = False
@@ -77,6 +77,10 @@ class BunchMonitor(object):
         # Prepare data
         self.beam.statistics()
 
+        # create directory to save h5 file if needed
+        dirname = os.path.dirname(filename)
+        os.makedirs(dirname, exist_ok=True)
+
         # Open file
         self.h5file = hp.File(filename + '.h5', 'w')
         self.h5file.require_group('Beam')
@@ -109,7 +113,7 @@ class BunchMonitor(object):
                                compression="gzip", compression_opts=9)
         h5group["epsn_rms_l"][0] = self.beam.epsn_rms_l
 
-        if self.fit_option == True:
+        if self.fit_option:
 
             h5group.create_dataset("bunch_length", shape=dims,
                                    dtype='f',
@@ -165,7 +169,7 @@ class BunchMonitor(object):
                                    compression="gzip", compression_opts=9)
             h5group["LHC_noise_FB_bl"][0] = self.LHCNoiseFB.bl_meas
 
-            if self.LHCNoiseFB.bl_meas_bbb != None:
+            if self.LHCNoiseFB.bl_meas_bbb is not None:
 
                 h5group.create_dataset("LHC_noise_FB_bl_bbb",
                                        shape=(self.n_turns + 1,
@@ -190,7 +194,7 @@ class BunchMonitor(object):
         self.b_sigma_dE = np.zeros(self.buffer_time)
         self.b_epsn_rms = np.zeros(self.buffer_time)
 
-        if self.fit_option == True:
+        if self.fit_option:
 
             self.b_bl = np.zeros(self.buffer_time)
 
@@ -208,7 +212,7 @@ class BunchMonitor(object):
 
             self.b_LHCnoiseFB_factor = np.zeros(self.buffer_time)
             self.b_LHCnoiseFB_bl = np.zeros(self.buffer_time)
-            if self.LHCNoiseFB.bl_meas_bbb != None:
+            if self.LHCNoiseFB.bl_meas_bbb is not None:
                 self.b_LHCnoiseFB_bl_bbb = np.zeros((self.buffer_time,
                                                      len(self.LHCNoiseFB.bl_meas_bbb)))
 
@@ -223,7 +227,7 @@ class BunchMonitor(object):
         self.b_sigma_dE[i] = self.beam.sigma_dE
         self.b_epsn_rms[i] = self.beam.epsn_rms_l
 
-        if self.fit_option == True:
+        if self.fit_option:
 
             self.b_bl[i] = self.profile.bunchLength
 
@@ -241,7 +245,7 @@ class BunchMonitor(object):
 
             self.b_LHCnoiseFB_factor[i] = self.LHCNoiseFB.x
             self.b_LHCnoiseFB_bl[i] = self.LHCNoiseFB.bl_meas
-            if self.LHCNoiseFB.bl_meas_bbb != None:
+            if self.LHCNoiseFB.bl_meas_bbb is not None:
                 self.b_LHCnoiseFB_bl_bbb[i, :] = self.LHCNoiseFB.bl_meas_bbb[:]
 
     def write_data(self, h5group, dims):
@@ -268,7 +272,7 @@ class BunchMonitor(object):
         h5group.require_dataset("epsn_rms_l", shape=dims, dtype='f')
         h5group["epsn_rms_l"][i1:i2] = self.b_epsn_rms[:]
 
-        if self.fit_option == True:
+        if self.fit_option:
 
             h5group.require_dataset("bunch_length", shape=dims,
                                     dtype='f')
@@ -314,7 +318,7 @@ class BunchMonitor(object):
                                     dtype='f')
             h5group["LHC_noise_FB_bl"][i1:i2] = self.b_LHCnoiseFB_bl[:]
 
-            if self.LHCNoiseFB.bl_meas_bbb != None:
+            if self.LHCNoiseFB.bl_meas_bbb is not None:
                 h5group.require_dataset("LHC_noise_FB_bl_bbb", shape=(self.n_turns + 1,
                                                                       len(self.LHCNoiseFB.bl_meas_bbb)),
                                         dtype='f')
@@ -329,13 +333,17 @@ class BunchMonitor(object):
         self.h5file.close()
 
 
-class SlicesMonitor(object):
+class SlicesMonitor:
 
     ''' Class able to save the bunch profile, i.e. the histogram derived from
         the slicing.
     '''
 
     def __init__(self, filename, n_turns, profile):
+
+        # create directory to save h5 file if needed
+        dirname = os.path.dirname(filename)
+        os.makedirs(dirname, exist_ok=True)
 
         self.h5file = hp.File(filename + '.h5', 'w')
         self.n_turns = n_turns
@@ -367,13 +375,17 @@ class SlicesMonitor(object):
         self.h5file.close()
 
 
-class MultiBunchMonitor(object):
+class MultiBunchMonitor:
 
     ''' Class able to save multi-bunch profile, i.e. the histogram derived from
         the slicing.
     '''
 
     def __init__(self, filename, n_turns, profile, rf, Nbunches, buffer_size=100):
+
+        # create directory to save h5 file if needed
+        dirname = os.path.dirname(filename)
+        os.makedirs(dirname, exist_ok=True)
 
         self.h5file = hp.File(filename + '.h5', 'w')
         self.n_turns = n_turns
@@ -455,7 +467,6 @@ class MultiBunchMonitor(object):
             self.b_std_dt = np.zeros(
                 (self.buffer_size, self.Nbunches), dtype=float)
 
-
     def __del__(self):
         if self.i_turn > self.last_save:
             self.write_data()
@@ -495,7 +506,7 @@ class MultiBunchMonitor(object):
                     (self.rf.beta[0]**2 * self.rf.energy[0])
             else:
                 self.b_dt_norm[idx] = self.rf.t_rev[turn] * self.rf.eta_0[turn] * \
-                    self.rf.voltage[0, turn-1] / \
+                    self.rf.voltage[0, turn - 1] / \
                     (self.rf.beta[turn]**2 * self.rf.energy[turn])
 
     def write_data(self):

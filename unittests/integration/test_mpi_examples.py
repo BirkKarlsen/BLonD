@@ -13,15 +13,17 @@ Integration tests for the MPI mode.
 :Authors: **Konstantinos Iliakis**
 """
 
-import unittest
-import pytest
 import os
 import subprocess
+import sys
+import unittest
+
+import pytest
 
 this_directory = os.path.dirname(os.path.realpath(__file__)) + '/'
 main_files_dir = os.path.join(this_directory + '../../__EXAMPLES/mpi_main_files')
-exec_args = ['mpirun', '-n', '2', 'python']
-timeout = 90    # Timeout in seconds
+exec_args = ['mpirun', '-n', '2', sys.executable]
+timeout = 60    # Timeout in seconds
 
 
 class TestMpiExamples(unittest.TestCase):
@@ -34,14 +36,14 @@ class TestMpiExamples(unittest.TestCase):
         except subprocess.TimeoutExpired as e:
             raise unittest.SkipTest('[{}] Timed out (timeout={}s)'.format(example, e.timeout))
 
-
     # Run before every test
+
     def setUp(self):
         pytest.importorskip('mpi4py')
         try:
             subprocess.call(['mpirun', '--version'])
         except FileNotFoundError:
-            unittest.skipTest('mpirun not found, skipping tests')
+            unittest.SkipTest('mpirun not found, skipping tests')
 
     # Run after every test
     def tearDown(self):

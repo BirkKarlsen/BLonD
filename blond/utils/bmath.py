@@ -1,119 +1,186 @@
 '''
 BLonD math and physics core functions
 
-@author Stefan Hegglin, Konstantinos Iliakis, Panagiotis Tsapatsaris
+@author Stefan Hegglin, Konstantinos Iliakis, Panagiotis Tsapatsaris, Georgios Typaldos
 @date 20.10.2017
 '''
-# from functools import wraps
-import os
 
 import numpy as np
-from ..utils import butils_wrap
-# from ..utils import bphysics_wrap
 
-precision = butils_wrap.precision
-__exec_mode = 'single_node'
-# Other modes: multi_node
+from ..utils import butils_wrap_cpp as _cpp
+from ..utils import butils_wrap_python as _py
+from . import precision
 
-__gpu_dev = None
 
-# dictionary storing the CPU versions of the desired functions #
-_CPU_func_dict = {
-    'rfft': np.fft.rfft,
-    'irfft': np.fft.irfft,
-    'rfftfreq': np.fft.rfftfreq,
-    'irfft_packed': butils_wrap.irfft_packed,
-    'sin_cpp': butils_wrap.sin_cpp,
-    'cos_cpp': butils_wrap.cos_cpp,
-    'exp_cpp': butils_wrap.exp_cpp,
-    'mean_cpp': butils_wrap.mean_cpp,
-    'std_cpp': butils_wrap.std_cpp,
-    'where_cpp': butils_wrap.where_cpp,
-    'interp_cpp': np.interp,
-    # 'interp_cpp': butils_wrap.interp_cpp,
-    # 'interp_const_space': butils_wrap.interp_const_space,
-    'interp_const_space': np.interp,
-    'cumtrapz': butils_wrap.cumtrapz,
-    'trapz_cpp': butils_wrap.trapz_cpp,
-    'linspace_cpp': butils_wrap.linspace_cpp,
-    'argmin_cpp': butils_wrap.argmin_cpp,
-    'argmax_cpp': butils_wrap.argmax_cpp,
-    'convolve': butils_wrap.convolve,
-    'arange_cpp': butils_wrap.arange_cpp,
-    'sum_cpp': butils_wrap.sum_cpp,
-    'sort_cpp': butils_wrap.sort_cpp,
-    'add_cpp': butils_wrap.add_cpp,
-    'mul_cpp': butils_wrap.mul_cpp,
-    'beam_phase': butils_wrap.beam_phase,
-    'beam_phase_fast': butils_wrap.beam_phase_fast,
-    'fast_resonator': butils_wrap.fast_resonator,
-    'kick': butils_wrap.kick,
-    'rf_volt_comp': butils_wrap.rf_volt_comp,
-    'drift': butils_wrap.drift,
-    'linear_interp_kick': butils_wrap.linear_interp_kick,
-    'LIKick_n_drift': butils_wrap.linear_interp_kick_n_drift,
-    'synchrotron_radiation': butils_wrap.synchrotron_radiation,
-    'synchrotron_radiation_full': butils_wrap.synchrotron_radiation_full,
-    'set_random_seed': butils_wrap.set_random_seed,
-    'sparse_histogram': butils_wrap.sparse_histogram,
-    # 'linear_interp_time_translation': butils_wrap.linear_interp_time_translation,
-    'slice': butils_wrap.slice,
-    'slice_smooth': butils_wrap.slice_smooth,
-    'music_track': butils_wrap.music_track,
-    'music_track_multiturn': butils_wrap.music_track_multiturn,
-    'device': 'CPU'
-}
+def use_cpp():
+    '''
+    Replace all python functions by there equivalent in cpp
+    '''
+    print('---------- Using the C++ computational backend ----------')
+    # dictionary storing the CPP versions of the most compute intensive functions #
+    cpp_func_dict = {
+        'rfft': np.fft.rfft,
+        'irfft': np.fft.irfft,
+        'rfftfreq': np.fft.rfftfreq,
 
-# add numpy functions in the dictionary
-for fname in dir(np):
-    if callable(getattr(np, fname)) and (fname not in _CPU_func_dict):
-        _CPU_func_dict[fname] = getattr(np, fname)
+        'kick': _cpp.kick,
+        'rf_volt_comp': _cpp.rf_volt_comp,
+        'drift': _cpp.drift,
+        'slice_beam': _cpp.slice_beam,
+        'slice_smooth': _cpp.slice_smooth,
+        'linear_interp_kick': _cpp.linear_interp_kick,
+        'synchrotron_radiation': _cpp.synchrotron_radiation,
+        'synchrotron_radiation_full': _cpp.synchrotron_radiation_full,
+        'music_track': _cpp.music_track,
+        'music_track_multiturn': _cpp.music_track_multiturn,
+        'fast_resonator': _cpp.fast_resonator,
+        'beam_phase': _cpp.beam_phase,
+        'beam_phase_fast': _cpp.beam_phase_fast,
+        'sparse_histogram': _cpp.sparse_histogram,
+        'distribution_from_tomoscope': _cpp.distribution_from_tomoscope,
+        'set_random_seed': _cpp.set_random_seed,
 
-# add basic numpy modules to dictionary as they are not callable
-_CPU_func_dict['random'] = getattr(np, 'random')
-_CPU_func_dict['fft'] = getattr(np, 'fft')
+        'sin_cpp': _cpp.sin_cpp,
+        'cos_cpp': _cpp.cos_cpp,
+        'exp_cpp': _cpp.exp_cpp,
+        'mean_cpp': _cpp.mean_cpp,
+        'std_cpp': _cpp.std_cpp,
+        'where_cpp': _cpp.where_cpp,
+        'interp_cpp': _cpp.interp_cpp,
+        'interp_const_space': _cpp.interp_const_space,
+        'cumtrapz': _cpp.cumtrapz,
+        'trapz_cpp': _cpp.trapz_cpp,
+        'linspace_cpp': _cpp.linspace_cpp,
+        'argmin_cpp': _cpp.argmin_cpp,
+        'argmax_cpp': _cpp.argmax_cpp,
+        'convolve': _cpp.convolve,
+        'arange_cpp': _cpp.arange_cpp,
+        'sum_cpp': _cpp.sum_cpp,
+        'sort_cpp': _cpp.sort_cpp,
+        'add_cpp': _cpp.add_cpp,
+        'mul_cpp': _cpp.mul_cpp,
 
-_FFTW_func_dict = {
-    'rfft': butils_wrap.rfft,
-    'irfft': butils_wrap.irfft,
-    'rfftfreq': butils_wrap.rfftfreq
-}
+        'device': 'CPU_CPP'
+    }
 
-_MPI_func_dict = {
+    # add numpy functions in the dictionary
+    for fname in dir(np):
+        if callable(getattr(np, fname)) and (fname not in cpp_func_dict) \
+                and (fname[0] != '_'):
+            cpp_func_dict[fname] = getattr(np, fname)
 
-}
+    # add basic numpy modules to dictionary as they are not callable
+    cpp_func_dict['random'] = getattr(np, 'random')
+    cpp_func_dict['fft'] = getattr(np, 'fft')
+
+    __update_active_dict(cpp_func_dict)
+
+
+def use_py():
+    '''
+    Replace all python functions by there equivalent in python
+    '''
+    print('---------- Using the Python computational backend ----------')
+
+    # dictionary storing the Python-only versions of the most compute intensive functions #
+    py_func_dict = {
+        'rfft': np.fft.rfft,
+        'irfft': np.fft.irfft,
+        'rfftfreq': np.fft.rfftfreq,
+
+        'kick': _py.kick,
+        'rf_volt_comp': _py.rf_volt_comp,
+        'drift': _py.drift,
+        'slice_beam': _py.slice_beam,
+        'slice_smooth': _py.slice_smooth,
+        'linear_interp_kick': _py.linear_interp_kick,
+        'synchrotron_radiation': _py.synchrotron_radiation,
+        'synchrotron_radiation_full': _py.synchrotron_radiation_full,
+        'music_track': _py.music_track,
+        'music_track_multiturn': _py.music_track_multiturn,
+        'fast_resonator': _py.fast_resonator,
+        'beam_phase': _py.beam_phase,
+        'beam_phase_fast': _py.beam_phase_fast,
+        'sparse_histogram': _py.sparse_histogram,
+        'distribution_from_tomoscope': _py.distribution_from_tomoscope,
+        'set_random_seed': _py.set_random_seed,
+
+        'device': 'CPU_PY'
+    }
+
+    # add numpy functions in the dictionary
+    for fname in dir(np):
+        if callable(getattr(np, fname)) and (fname not in py_func_dict) \
+                and (fname[0] != '_'):
+
+            py_func_dict[fname] = getattr(np, fname)
+
+    # add basic numpy modules to dictionary as they are not callable
+    py_func_dict['random'] = getattr(np, 'random')
+    py_func_dict['fft'] = getattr(np, 'fft')
+
+    # Update the global functions
+    __update_active_dict(py_func_dict)
+
+
+def use_cpu():
+    '''
+    If not library is found, use the python implementations
+    '''
+    from .. import LIBBLOND as __lib
+    if __lib is None:
+        use_py()
+    else:
+        use_cpp()
 
 
 def use_mpi():
     '''
     Replace some bm functions with MPI implementations
     '''
-    global __exec_mode
-    globals().update(_MPI_func_dict)
-    __exec_mode = 'multi_node'
+
+    mpi_func_dict = {
+        'device': 'CPU_MPI'
+    }
+    globals().update(mpi_func_dict)
 
 
-def mpiMode():
-    global __exec_mode
-    return __exec_mode == 'multi_node'
+def in_mpi():
+    """Check if we are currently in MPI mode
+
+    Returns:
+        bool: True if in MPI mode
+    """
+    return globals()['device'] == 'CPU_MPI'
 
 
 def use_fftw():
     '''
     Replace the existing rfft and irfft implementations
-    with the ones coming from butils_wrap.
+    with the ones coming from _cpp.
     '''
-    globals().update(_FFTW_func_dict)
+    print('---------- Using the FFTW FFT library ----------')
+
+    fftw_func_dict = {
+        'rfft': _cpp.rfft,
+        'irfft': _cpp.irfft,
+        'rfftfreq': _cpp.rfftfreq
+    }
+    globals().update(fftw_func_dict)
 
 
 # precision can be single or double
 def use_precision(_precision='double'):
-    global precision
-    butils_wrap.precision = butils_wrap.Precision(_precision)
-    precision = butils_wrap.precision
+    """Change the precision used in caclulations.
+
+    Args:
+        _precision (str, optional): Can be either 'single' or 'double'. Defaults to 'double'.
+    """
+    print(f'---------- Using {_precision} precision numeric datatypes ----------')
+    precision.set(_precision)
 
 
-def update_active_dict(new_dict):
+def __update_active_dict(new_dict):
     '''
     Update the currently active dictionary. Removes the keys of the currently
     active dictionary from globals() and spills the keys
@@ -121,131 +188,85 @@ def update_active_dict(new_dict):
     Args:
         new_dict A dictionary which contents will be spilled to globals()
     '''
-    if not hasattr(update_active_dict, 'active_dict'):
-        update_active_dict.active_dict = new_dict
+    if not hasattr(__update_active_dict, 'active_dict'):
+        __update_active_dict.active_dict = new_dict
 
     # delete all old implementations/references from globals()
-    for key in update_active_dict.active_dict.keys():
+    for key in __update_active_dict.active_dict.keys():
         if key in globals():
             del globals()[key]
     # for key in globals().keys():
-    #     if key in update_active_dict.active_dict.keys():
+    #     if key in __update_active_dict.active_dict.keys():
     #         del globals()[key]
     # add the new active dict to the globals()
     globals().update(new_dict)
-    update_active_dict.active_dict = new_dict
-
-
-###############################################################################
-update_active_dict(_CPU_func_dict)
-###############################################################################
+    __update_active_dict.active_dict = new_dict
 
 
 # GPU Related Utilities
+def get_gpu_device():
+    """Get the GPU device object
 
-def gpuDev():
-    return __gpu_dev
-
-
-class GPUDev:
-    __instance = None
-
-    def __init__(self, _gpu_num=0):
-        if GPUDev.__instance is not None:
-            return
-            # raise Exception("The GPUDev class is a singleton!")
-        else:
-            GPUDev.__instance = self
-
-        import cupy as cp
-        self.id = _gpu_num
-        self.dev = cp.cuda.Device(self.id)
-        self.dev.use()
-
-        self.name = cp.cuda.runtime.getDeviceProperties(self.dev)['name']
-        self.attributes = self.dev.attributes
-        self.properties = cp.cuda.runtime.getDeviceProperties(self.dev)
-
-        # set the default grid and block sizes
-        default_blocks = 2 * self.attributes['MultiProcessorCount']
-        default_threads = self.attributes['MaxThreadsPerBlock']
-        blocks = int(os.environ.get('GPU_BLOCKS', default_blocks))
-        threads = int(os.environ.get('GPU_THREADS', default_threads))
-        self.grid_size = (blocks, 1, 1)
-        self.block_size = (threads, 1, 1)
-
-        this_dir = os.path.dirname(os.path.realpath(__file__)) + "/"
-        comp_capability = self.dev.compute_capability
-
-        if precision.num == 1:
-            self.mod = cp.RawModule(path=os.path.join(
-                this_dir, f'../gpu/cuda_kernels/kernels_single_sm_{comp_capability}.cubin'))
-        else:
-            self.mod = cp.RawModule(path=os.path.join(
-                this_dir, f'../gpu/cuda_kernels/kernels_double_sm_{comp_capability}.cubin'))
-
-    def report_attributes(self):
-        # Saves into a file all the device attributes
-        with open(f'{self.name}-attributes.txt', 'w') as f:
-            for k, v in self.attributes.items():
-                f.write(f"{k}:{v}\n")
-
-    def func(self, name):
-        return self.mod.get_function(name)
-
-    def __del__(self):
-        update_active_dict(_CPU_func_dict)
+    Returns:
+        _type_: _description_
+    """
+    from ..gpu import GPU_DEV
+    return GPU_DEV
 
 
 def use_gpu(gpu_id=0):
+    """Use the GPU device to perform the calculations.
 
+    Args:
+        gpu_id (int, optional): The device id. Defaults to 0.
+    """
     if gpu_id < 0:
         return
 
-    global __gpu_dev
-    if __gpu_dev is None:
-        __gpu_dev = GPUDev(gpu_id)
+    from ..gpu import GPU_DEV
 
-        print(''.join(['#']*10) +
-              ' Using GPU: id {}, name {}, Compute Capability {} '.format(
-            __gpu_dev.id, __gpu_dev.name, __gpu_dev.dev.compute_capability)
-            + ''.join(['#']*10) + '\n', flush=True)
+    GPU_DEV.set(gpu_id)
 
-    from ..gpu import cupy_butils_wrap
     import cupy as cp
 
-    _GPU_func_dict = {
-        # 'rfft': cupy_butils_wrap.rfft,
-        # 'irfft': cupy_butils_wrap.irfft,
+    from ..gpu import butils_wrap_cupy as _cupy
+
+    gpu_func_dict = {
         'rfft': cp.fft.rfft,
         'irfft': cp.fft.irfft,
         'rfftfreq': cp.fft.rfftfreq,
         'convolve': cp.convolve,
-        # 'convolve': cupy_butils_wrap.convolve,
-        'beam_phase': cupy_butils_wrap.beam_phase,
-        'beam_phase_fast': cupy_butils_wrap.beam_phase_fast,
-        'kick': cupy_butils_wrap.kick,
-        'rf_volt_comp': cupy_butils_wrap.rf_volt_comp,
-        'drift': cupy_butils_wrap.drift,
-        'linear_interp_kick': cupy_butils_wrap.linear_interp_kick,
-        'LIKick_n_drift': cupy_butils_wrap.linear_interp_kick_drift,
-        'synchrotron_radiation': cupy_butils_wrap.synchrotron_radiation,
-        'synchrotron_radiation_full': cupy_butils_wrap.synchrotron_radiation_full,
-        'slice': cupy_butils_wrap.slice,
-        # 'interp_const_space': cupy_butils_wrap.interp,
+        # 'convolve': _cupy.convolve,
+        'beam_phase': _cupy.beam_phase,
+        'beam_phase_fast': _cupy.beam_phase_fast,
+        'kick': _cupy.kick,
+        'rf_volt_comp': _cupy.rf_volt_comp,
+        'drift': _cupy.drift,
+        'linear_interp_kick': _cupy.linear_interp_kick,
+        # 'LIKick_n_drift': _cupy.linear_interp_kick_drift,
+        'synchrotron_radiation': _cupy.synchrotron_radiation,
+        'synchrotron_radiation_full': _cupy.synchrotron_radiation_full,
+        'slice_beam': _cupy.slice_beam,
+        # 'interp_const_space': _cupy.interp,
         'interp_const_space': cp.interp,
         'device': 'GPU'
     }
     # add cupy functions in the dictionary
     for fname in dir(cp):
-        if callable(getattr(cp, fname)) and (fname not in _GPU_func_dict):
-            _GPU_func_dict[fname] = getattr(cp, fname)
-    update_active_dict(_GPU_func_dict)
+        if callable(getattr(cp, fname)) and (fname not in gpu_func_dict):
+            gpu_func_dict[fname] = getattr(cp, fname)
+    __update_active_dict(gpu_func_dict)
 
     # add basic cupy modules to dictionary as they are not callable
-    _GPU_func_dict['random'] = getattr(cp, 'random')
-    _GPU_func_dict['fft'] = getattr(cp, 'fft')
+    gpu_func_dict['random'] = getattr(cp, 'random')
+    gpu_func_dict['fft'] = getattr(cp, 'fft')
+
+    print('---------- Using the GPU computational backend ----------')
+    print(f'---------- GPU Device: id {GPU_DEV.id}, name {GPU_DEV.name}, Compute Capability {GPU_DEV.dev.compute_capability} ----------',
+           flush=True)
 
 
-def use_cpu():
-    update_active_dict(_CPU_func_dict)
+###############################################################################
+# By default use the CPU backend (python-only or C++)
+use_cpu()
+###############################################################################

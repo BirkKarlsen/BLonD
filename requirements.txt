@@ -1,9 +1,5 @@
-numpy
+numpy>=1.20
 scipy
-matplotlib
-future
+matplotlib>=3.7
 h5py
-mpi4py
 mpmath
-cupy-cuda11x
-
