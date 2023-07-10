@@ -70,6 +70,11 @@ def cartesian_to_polar(IQ_vector):
     return np.absolute(IQ_vector), np.angle(IQ_vector)
 
 
+def get_power_gen_i(I_gen_per_cav, Z_0):
+    ''' RF generator power from generator current (physical, in [A]), for any f_r (and thus any tau) '''
+    return 0.5 * Z_0 * np.abs(I_gen_per_cav)**2
+
+
 def modulator(signal, omega_i, omega_f, T_sampling, phi_0=0, dt=0):
     """Demodulate a signal from initial frequency to final frequency. The two
     frequencies should be close.
