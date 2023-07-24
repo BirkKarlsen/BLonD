@@ -157,12 +157,10 @@ class CavityFeedback:
 
         # Present coarse grid and save previous turn coarse grid
         self.rf_centers_prev = np.copy(self.rf_centers)
-        self.rf_centers = (np.arange(self.n_coarse) + 0.5 / self.n_s) * self.T_s + self.dT
 
-        # Left over RF bucket from turn current turn
-        self.T_res = self.rfstation.t_rev[self.rfstation.counter[0]] - self.rf_centers[-1]
         # Residual part of last turn entering the current turn due to non-integer harmonic number
-        self.dT = 0.5 * self.T_s / self.n_s - self.T_res % (self.T_s / self.n_s)
+        self.dT = -self.rfstation.phi_rf[0, self.counter + 1] / self.omega_carrier
+        self.rf_centers = (np.arange(self.n_coarse) + 0.5 / self.n_s) * self.T_s + self.dT
 
 
 class SPSCavityLoopCommissioning:
