@@ -298,9 +298,9 @@ class LHCCavityLoopCommissioning:
 
 class SPSOneTurnFeedback(CavityFeedback):
 
-    def __init__(self, n_sections, V_part=4/9, G_ff=1, G_llrf=10, G_tx=0.5, a_comb=63/64, df=0,
-                 Commissioning=SPSCavityLoopCommissioning(), *args, **kwargs):
-        super().__init__(n_s=1, *args, **kwargs)
+    def __init__(self, RFStation, Profile, n_sections, n_cavities=4, V_part=4/9, G_ff=1, G_llrf=10, G_tx=0.5,
+                 a_comb=63/64, df=0, Commissioning=SPSCavityLoopCommissioning()):
+        super().__init__(RFStation=RFStation, Profile=Profile, n_cavities=n_cavities, n_s=1)
 
         # Set up logging
         self.logger = logging.getLogger(__class__.__name__)
@@ -1021,10 +1021,10 @@ class LHCCavityLoop(CavityFeedback):
         Logger of the present class
     '''
 
-    def __init__(self, f_c=400.789e6, G_gen=1, I_gen_offset=0, n_pretrack=200, Q_L=20000,
-                 R_over_Q=45, tau_loop=650e-9, tau_otfb=1472e-9, RFFB=LHCCavityLoopCommissioning(),
-                 *args, **kwargs):
-        super().__init__(n_s=10, *args, **kwargs)
+    def __init__(self, RFStation, Profile, n_cavities=8, f_c=400.789e6, G_gen=1, I_gen_offset=0, n_pretrack=200,
+                 Q_L=20000, R_over_Q=45, tau_loop=650e-9, tau_otfb=1472e-9, RFFB=LHCCavityLoopCommissioning()):
+
+        super().__init__(RFStation=RFStation, Profile=Profile, n_cavities=n_cavities, n_s=10)
 
         # Set up logging
         self.logger = logging.getLogger(__class__.__name__)
