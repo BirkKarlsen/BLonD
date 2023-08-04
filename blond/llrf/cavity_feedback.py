@@ -30,12 +30,8 @@ from blond.llrf.impulse_response import (SPS3Section200MHzTWC,
                                          SPS4Section200MHzTWC,
                                          SPS5Section200MHzTWC)
 from blond.llrf.signal_processing import (cartesian_to_polar, comb_filter,
-                                          feedforward_filter_TWC3_1,
-                                          feedforward_filter_TWC3_2,
-                                          feedforward_filter_TWC3_3,
-                                          feedforward_filter_TWC4_1,
-                                          feedforward_filter_TWC4_2,
-                                          feedforward_filter_TWC4_3,
+                                          feedforward_filter_TWC3,
+                                          feedforward_filter_TWC4,
                                           feedforward_filter_TWC5, modulator,
                                           moving_average, get_power_gen_i,
                                           polar_to_cartesian, rf_beam_current,
@@ -168,7 +164,7 @@ class SPSCavityLoopCommissioning:
     def __init__(self, debug=False, open_loop=False, open_FB=False,
                  open_drive=False, open_FF=False, V_SET=None,
                  cpp_conv=False, pwr_clamp=False, rot_IQ=1,
-                 FIR_filter=1, excitation=False):
+                 excitation=False):
         """Class containing commissioning settings for the cavity feedback
 
         Parameters
@@ -191,8 +187,6 @@ class SPSCavityLoopCommissioning:
             Enable (True) or disable (False) power clamping; default is False
         rot_IQ : complex
             Option to rotate the set point and beam induced voltages in the complex plane.
-        FIR_filter : int
-            Switch between different FIR filters for the FFWD
         excitation : bool
             Excite the model with white noise to perform BBNA measurements
         """
@@ -207,7 +201,6 @@ class SPSCavityLoopCommissioning:
         self.cpp_conv = cpp_conv
         self.pwr_clamp = pwr_clamp
         self.rot_IQ = rot_IQ
-        self.FIR_filter = FIR_filter
         self.excitation = int(excitation)
 
 
@@ -355,8 +348,7 @@ class SPSOneTurnFeedback(CavityFeedback):
             if self.open_FF == 1:
                 # Feed-forward filter
                 self.coeff_FF = getattr(sys.modules[__name__],
-                                        "feedforward_filter_TWC" + str(n_sections)
-                                        + "_" + str(Commissioning.FIR_filter))
+                                        "feedforward_filter_TWC" + str(n_sections))
                 self.n_FF = len(self.coeff_FF)  # Number of coefficients for FF
                 self.n_FF_delay = int(0.5 * (self.n_FF - 1) +
                                       0.5 * self.TWC.tau / self.rfstation.t_rf[0, 0] / 5)
