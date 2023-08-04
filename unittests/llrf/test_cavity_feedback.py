@@ -10,24 +10,24 @@
 """
 Unittest for llrf.cavity_feedback
 
-:Authors: **Birk Emil Karlsen-Baeck**, **Helga Timko**
+:Authors: **Birk Emil Karlsen-Bæck**, **Helga Timko**
 """
 
 import unittest
 
-import matplotlib.pyplot as plt
 import numpy as np
 from scipy.constants import c
 
-from blond.llrf.cavity_feedback import SPSOneTurnFeedback, SPSCavityFeedback, SPSCavityLoopCommissioning
-from blond.beam.beam import Beam, Proton
-from blond.beam.profile import Profile, CutOptions
+from blond.llrf.cavity_feedback import (SPSOneTurnFeedback, SPSCavityFeedback,
+                                        SPSCavityLoopCommissioning,
+                                        LHCCavityLoop, LHCCavityLoopCommissioning)
+from blond.beam.beam import (Beam, Proton)
+from blond.beam.profile import (Profile, CutOptions)
 from blond.beam.distributions import bigaussian
 from blond.input_parameters.rf_parameters import RFStation
 from blond.input_parameters.ring import Ring
-from blond.llrf.cavity_feedback import LHCCavityLoop, LHCCavityLoopCommissioning
 from blond.trackers.tracker import RingAndRFTracker
-from blond.impedances.impedance import TotalInducedVoltage, InducedVoltageTime
+from blond.impedances.impedance import (TotalInducedVoltage, InducedVoltageTime)
 from blond.impedances.impedance_sources import TravelingWaveCavity
 
 

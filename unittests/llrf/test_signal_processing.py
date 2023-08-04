@@ -10,24 +10,23 @@
 """
 Unittest for llrf.filters
 
-:Authors: **Birk Emil Karlsen-Baeck**, **Helga Timko**
+:Authors: **Birk Emil Karlsen-Bæck**, **Helga Timko**
 """
 
 import unittest
 
-import matplotlib.pyplot as plt
 import numpy as np
 from scipy.constants import e
 
-from blond.llrf.signal_processing import moving_average, modulator
-from blond.llrf.signal_processing import polar_to_cartesian, cartesian_to_polar
-from blond.llrf.signal_processing import comb_filter, low_pass_filter
-from blond.llrf.signal_processing import rf_beam_current, feedforward_filter
-from blond.llrf.signal_processing import feedforward_filter_TWC3, \
-    feedforward_filter_TWC4, feedforward_filter_TWC5
-
-from blond.llrf.impulse_response import SPS3Section200MHzTWC, \
-    SPS4Section200MHzTWC, SPS5Section200MHzTWC
+from blond.llrf.signal_processing import (moving_average, modulator, polar_to_cartesian,
+                                          cartesian_to_polar, comb_filter, low_pass_filter,
+                                          rf_beam_current, feedforward_filter,
+                                          feedforward_filter_TWC3,
+                                          feedforward_filter_TWC4,
+                                          feedforward_filter_TWC5)
+from blond.llrf.impulse_response import (SPS3Section200MHzTWC,
+                                         SPS4Section200MHzTWC,
+                                         SPS5Section200MHzTWC)
 
 from blond.input_parameters.ring import Ring
 from blond.beam.beam import Beam, Proton

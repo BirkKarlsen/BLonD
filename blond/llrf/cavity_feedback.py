@@ -10,7 +10,7 @@
 '''
 **Parent class to develop cavity feedback models and various cavity loops for the CERN machines**
 
-:Authors: **Birk Emil Karlsen-Baeck**, **Helga Timko**
+:Authors: **Birk Emil Karlsen-Bæck**, **Helga Timko**
 '''
 
 

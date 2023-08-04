@@ -10,7 +10,7 @@
 '''
 **Filters and methods for control loops**
 
-:Authors: **Birk Emil Karlsen-Baeck**, **Helga Timko**
+:Authors: **Birk Emil Karlsen-Bæck**, **Helga Timko**
 '''
 
 from __future__ import division
