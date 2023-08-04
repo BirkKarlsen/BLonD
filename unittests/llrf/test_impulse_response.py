@@ -10,7 +10,7 @@
 """
 Unittest for llrf.filters
 
-:Authors: **Birk Emil Karlsen-Bæck**, **Helga Timko**
+:Authors: **Birk Emil Karlsen-Baeck**, **Helga Timko**
 """
 
 import unittest
@@ -26,7 +26,7 @@ from blond.beam.distributions import bigaussian
 from blond.beam.profile import Profile, CutOptions
 from blond.impedances.impedance import InducedVoltageTime, TotalInducedVoltage
 from blond.llrf.cavity_feedback import SPSOneTurnFeedback, \
-    CavityFeedbackCommissioning
+    SPSCavityLoopCommissioning
 from blond.impedances.impedance_sources import TravelingWaveCavity
 
 
@@ -171,8 +171,8 @@ class TestTravelingWaveCavity(unittest.TestCase):
                                     digit_round)
 
         # Beam loading via feed-back system
-        OTFB_4 = SPSOneTurnFeedback(rf, beam, profile, 4, n_cavities=1,
-            Commissioning=CavityFeedbackCommissioning(open_FF=True, rot_IQ=1), df=0.2275e6)
+        OTFB_4 = SPSOneTurnFeedback(rf, profile, 4, n_cavities=1,
+            Commissioning=SPSCavityLoopCommissioning(open_FF=True, rot_IQ=1), df=0.2275e6)
         OTFB_4.counter = 0  # First turn
 
         OTFB_4.omega_c = factor * OTFB_4.TWC.omega_r
@@ -184,8 +184,10 @@ class TestTravelingWaveCavity(unittest.TestCase):
         # convert back to time
         V_ind_OTFB \
             = np.abs(OTFB_4.V_IND_FINE_BEAM[-OTFB_4.profile.n_slices:]) \
-                * np.sin(OTFB_4.omega_c*profile.bin_centers +
-                         np.angle(OTFB_4.V_IND_FINE_BEAM[-OTFB_4.profile.n_slices:]) - np.pi / 2)
+                * np.sin(OTFB_4.omega_rf * profile.bin_centers +
+                         np.angle(OTFB_4.V_IND_FINE_BEAM[-OTFB_4.profile.n_slices:])
+                         + rf.phi_rf[0, rf.counter[0]]
+                         - np.angle(OTFB_4.V_SET[-OTFB_4.n_coarse]))
 
         V_ind_OTFB = np.around(V_ind_OTFB, digit_round)
 
@@ -226,8 +228,8 @@ class TestTravelingWaveCavity(unittest.TestCase):
         profile2.track()
 
         # Calculate impulse response and induced voltage
-        OTFB = SPSOneTurnFeedback(rf, beam2, profile2, 3, n_cavities=1,
-            Commissioning=CavityFeedbackCommissioning(open_FF=True, rot_IQ=-1),
+        OTFB = SPSOneTurnFeedback(rf, profile2, 3, n_cavities=1,
+            Commissioning=SPSCavityLoopCommissioning(open_FF=True, rot_IQ=-1),
                                   df=0.18433333e6)
         OTFB.TWC.impulse_response_beam(OTFB.omega_c, OTFB.profile.bin_centers,
                                        OTFB.rf_centers)
