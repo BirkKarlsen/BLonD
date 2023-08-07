@@ -24,7 +24,6 @@ import scipy.signal
 from scipy.sparse import diags
 from scipy.sparse.linalg import spsolve
 from scipy.interpolate import interp1d
-import sys
 
 from blond.llrf.impulse_response import (SPS3Section200MHzTWC,
                                          SPS4Section200MHzTWC,

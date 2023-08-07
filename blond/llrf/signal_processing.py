@@ -14,18 +14,19 @@
 '''
 
 from __future__ import division
-import numpy as np
-import numpy.linalg as npla
-from scipy.constants import e
-from scipy import signal as sgn
 from scipy.special import comb
-import matplotlib.pyplot as plt
+from blond.llrf.impulse_response import TravellingWaveCavity
 
 # Set up logging
 import logging
-logger = logging.getLogger(__name__)
 
-from blond.llrf.impulse_response import TravellingWaveCavity
+import matplotlib.pyplot as plt
+import numpy as np
+import numpy.linalg as npla
+from scipy import signal as sgn
+from scipy.constants import e
+
+logger = logging.getLogger(__name__)
 
 
 def polar_to_cartesian(amplitude, phase):

@@ -15,12 +15,12 @@
 
 from __future__ import division
 
-import matplotlib.pyplot as plt
+# Set up logging
+import logging
+
 import numpy as np
 from scipy.constants import c
 
-# Set up logging
-import logging
 logger = logging.getLogger(__name__)
 
 
