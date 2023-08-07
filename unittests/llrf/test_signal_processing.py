@@ -18,21 +18,23 @@ import unittest
 import numpy as np
 from scipy.constants import e
 
-from blond.llrf.signal_processing import (moving_average, modulator, polar_to_cartesian,
-                                          cartesian_to_polar, comb_filter, low_pass_filter,
-                                          rf_beam_current, feedforward_filter,
-                                          feedforward_filter_TWC3,
-                                          feedforward_filter_TWC4,
-                                          feedforward_filter_TWC5)
+from blond.beam.beam import Beam, Proton
+from blond.beam.distributions import bigaussian
+from blond.beam.profile import CutOptions, Profile
+from blond.input_parameters.rf_parameters import RFStation
+from blond.input_parameters.ring import Ring
 from blond.llrf.impulse_response import (SPS3Section200MHzTWC,
                                          SPS4Section200MHzTWC,
                                          SPS5Section200MHzTWC)
+from blond.llrf.signal_processing import (cartesian_to_polar, comb_filter,
+                                          feedforward_filter,
+                                          feedforward_filter_TWC3,
+                                          feedforward_filter_TWC4,
+                                          feedforward_filter_TWC5,
+                                          low_pass_filter, modulator,
+                                          moving_average, polar_to_cartesian,
+                                          rf_beam_current)
 
-from blond.input_parameters.ring import Ring
-from blond.beam.beam import Beam, Proton
-from blond.beam.profile import Profile, CutOptions
-from blond.beam.distributions import bigaussian
-from blond.input_parameters.rf_parameters import RFStation
 
 class TestIQ(unittest.TestCase):
 

@@ -18,17 +18,17 @@ import unittest
 import numpy as np
 from scipy.constants import c
 
-from blond.llrf.impulse_response import (rectangle, triangle, SPS4Section200MHzTWC)
-from blond.input_parameters.ring import Ring
-from blond.input_parameters.rf_parameters import RFStation
-from blond.beam.beam import (Beam, Proton)
+from blond.beam.beam import Beam, Proton
 from blond.beam.distributions import bigaussian
-from blond.beam.profile import (Profile, CutOptions)
-from blond.impedances.impedance import (InducedVoltageTime, TotalInducedVoltage)
-from blond.llrf.cavity_feedback import (SPSOneTurnFeedback,
-                                        SPSCavityLoopCommissioning)
+from blond.beam.profile import CutOptions, Profile
+from blond.impedances.impedance import InducedVoltageTime, TotalInducedVoltage
 from blond.impedances.impedance_sources import TravelingWaveCavity
-
+from blond.input_parameters.rf_parameters import RFStation
+from blond.input_parameters.ring import Ring
+from blond.llrf.cavity_feedback import (SPSCavityLoopCommissioning,
+                                        SPSOneTurnFeedback)
+from blond.llrf.impulse_response import (SPS4Section200MHzTWC, rectangle,
+                                         triangle)
 
 class TestRectangle(unittest.TestCase):
 
