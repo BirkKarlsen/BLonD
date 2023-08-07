@@ -10,22 +10,22 @@
 '''
 **Filters and methods for control loops**
 
-:Authors: **Birk Emil Karlsen-Baeck**, **Helga Timko**
+:Authors: **Birk Emil Karlsen-Bæck**, **Helga Timko**
 '''
 
 from __future__ import division
+import numpy as np
+import numpy.linalg as npla
+from scipy.constants import e
+from scipy import signal as sgn
 from scipy.special import comb
-from blond.llrf.impulse_response import TravellingWaveCavity
+import matplotlib.pyplot as plt
 
 # Set up logging
 import logging
-
-import matplotlib.pyplot as plt
-import numpy as np
-from scipy import signal as sgn
-from scipy.constants import e
-
 logger = logging.getLogger(__name__)
+
+from blond.llrf.impulse_response import TravellingWaveCavity
 
 
 def polar_to_cartesian(amplitude, phase):
@@ -69,6 +69,11 @@ def cartesian_to_polar(IQ_vector):
     logger.debug("Converting from Cartesian to polar")
 
     return np.absolute(IQ_vector), np.angle(IQ_vector)
+
+
+def get_power_gen_i(I_gen_per_cav, Z_0):
+    ''' RF generator power from generator current (physical, in [A]), for any f_r (and thus any tau) '''
+    return 0.5 * Z_0 * np.abs(I_gen_per_cav)**2
 
 
 def modulator(signal, omega_i, omega_f, T_sampling, phi_0=0, dt=0):
@@ -462,7 +467,7 @@ def smooth_step(x, x_min=0, x_max=1, N=1):
     return result
 
 
-def feedforward_filter(TWC: TravellingWaveCavity, T_s, debug=False, taps=None,
+def feedforward_filter(TWC: TravellingWaveCavity, T_s, taps=None,
                        opt_output=False):
     """Function to design n-tap FIR filter for SPS TravellingWaveCavity.
 
@@ -472,8 +477,6 @@ def feedforward_filter(TWC: TravellingWaveCavity, T_s, debug=False, taps=None,
         TravellingWaveCavity type class
     T_s : float
         Sampling time [s]
-    debug : bool
-        When True, activates printouts and plots; default is False
     taps : int
         User-defined number of taps; default is None and number of taps is
         calculated from the filling time
@@ -493,7 +496,7 @@ def feedforward_filter(TWC: TravellingWaveCavity, T_s, debug=False, taps=None,
     """
 
     # Filling time in samples
-    n_filling = int(TWC.tau / T_s)
+    n_filling = int(round(TWC.tau / T_s))
     logger.debug("Filling time in samples: %d", n_filling)
 
     # Number of FIR filter taps
@@ -501,7 +504,7 @@ def feedforward_filter(TWC: TravellingWaveCavity, T_s, debug=False, taps=None,
         n_taps = int(taps)
     else:
         n_taps = 2 * int(0.5 * n_filling) + 13  # 31
-    n_taps_2 = int(0.5 * (n_taps + 1))
+
     if n_taps % 2 == 0:
         raise RuntimeError("Number of taps in feedforward filter must be odd!")
     logger.debug("Number of taps: %d", n_taps)
@@ -510,130 +513,125 @@ def feedforward_filter(TWC: TravellingWaveCavity, T_s, debug=False, taps=None,
     n_fit = int(n_taps + n_filling)
     logger.debug("Fitting samples: %d", n_fit)
 
-    # Even-symmetric feed-forward filter matrix
-    even = np.zeros(shape=(n_taps, n_taps_2), dtype=np.float64)
-    for i in range(n_taps):
-        even[i, abs(n_taps_2 - i - 1)] = 1
+    def V_real(t, tauf):
+        output = np.zeros(t.shape)
+        for i in range(len(t)):
+            if t[i] < -tauf:
+                output[i] = 0
+            elif t[i] < 0:
+                output[i] = (t[i] / tauf + 1) ** 2 / 2
+            elif t[i] < tauf:
+                output[i] = -1 / 2 * (t[i] / tauf) ** 2 + t[i] / tauf + 1 / 2
+            else:
+                output[i] = 1
+        return output
 
-    # Odd-symmetric feed-forward filter matrix
-    odd = np.zeros(shape=(n_taps, n_taps_2 - 1), dtype=np.float64)
-    for i in range(n_taps_2 - 1):
-        odd[i, abs(n_taps_2 - i - 2)] = -1
-        odd[n_taps - i - 1, abs(n_taps_2 - i - 2)] = 1
+    # Imaginary part
+    def V_imag(t, tauf):
+        output = np.zeros(t.shape)
+        for i in range(len(t)):
+            if t[i] < -tauf:
+                output[i] = 0
+            elif t[i] < 0:
+                output[i] = -(t[i] / tauf + 1) ** 2 / 2
+            elif t[i] < tauf:
+                output[i] = -1 / 2 * (t[i] / tauf) ** 2 + t[i] / tauf - 1 / 2
+            else:
+                output[i] = 0
+        return output
 
-    # Generator-cavity response matrix: non-zero during filling time
-    resp = np.zeros(shape=(n_fit, n_fit + n_filling - 1), dtype=np.float64)
-    for i in range(n_fit):
-        resp[i, i:i + n_filling] = 1
+    Pfit_ = np.linspace(-(n_fit - 1) / 2, (n_fit - 1) / 2, n_fit)
 
-    # Convolution with beam step current
-    conv = np.zeros(shape=(n_fit + n_filling - 1, n_taps), dtype=np.float64)
-    for i in range(n_taps):
-        conv[i + n_filling, 0:i] = 1
-    conv[n_taps + n_filling:, :] = 1
+    # Even symmetric part of beam loading
+    Dvectoreven = V_real(Pfit_, n_filling)
 
-    if debug:
-        np.set_printoptions(threshold=10000, linewidth=100)
-        print("Even matrix shape", even.shape)
-        print(even)
-        print("Odd matrix shape", odd.shape)
-        print(odd)
-        print("Response matrix shape", resp.shape)
-        print(resp)
-        print("Convolution matrix shape", conv.shape)
-        print(conv)
-        print("\n\n")
+    # Odd symmetric part of beam loading
+    Dvectorodd = V_imag(Pfit_, n_filling)
 
-    # Impulse response from cavity towards beam
-    time_array = np.linspace(0, n_fit * T_s, num=n_fit) - TWC.tau / 2
-    TWC.impulse_response_beam(TWC.omega_r, time_array)
-    h_beam_real = TWC.h_beam.real / TWC.R_beam * TWC.tau
+    # Step response of FIR. (M1, N1) must be odd
+    def Smatrix(M1, N1):
+        output = np.zeros((M1, N1))
+        for i in range(M1):
+            for j in range(N1):
+                if i - j >= (M1 - N1) / 2:
+                    output[i, j] = 1
+        return output
 
-    # Even and odd parts of impulse response
-    h_beam_even = np.zeros(n_fit)
-    h_beam_odd = np.zeros(n_fit)
-    if n_filling % 2 == 0:
-        n_c = int((n_fit - 1) * 0.5)
-        h_beam_even[n_c] = h_beam_real[0]
-        h_beam_even[n_c + 1:] = 0.5 * h_beam_real[1:n_c + 1]
-        h_beam_even[:n_c] = 0.5 * (h_beam_real[1:n_c + 1])[::-1]
-        h_beam_odd[n_c] = 0
-        h_beam_odd[n_c + 1:] = 0.5 * h_beam_real[1:n_c + 1]
-        h_beam_odd[:n_c] = 0.5 * (-h_beam_real[1:n_c + 1])[::-1]
-    else:
-        n_c = int(n_fit * 0.5)
-        h_beam_even[n_c:] = 0.5 * h_beam_real[1:n_c + 1]
-        h_beam_even[:n_c] = 0.5 * (h_beam_real[1:n_c + 1])[::-1]
-        h_beam_odd[n_c:] = 0.5 * h_beam_real[1:n_c + 1]
-        h_beam_odd[:n_c] = 0.5 * (-h_beam_real[1:n_c + 1])[::-1]
+    # Response of symmetrix rectangle of length L. P must be odd
+    def Rmatrix(P, L):
+        output = np.zeros((P, P + L - 1))
+        for i in range(output.shape[0]):
+            for j in range(output.shape[1]):
+                if i - j <= 0 and i - j > -L:
+                    output[i, j] = 1
+        return output
 
-    # Beam current step for step response
-    I_beam_step = np.ones(n_fit)
-    I_beam_step[0] = 0
-    I_beam_step[1] = 0.5
+    def uniform_weighting(n, Nt):
+        return 1
 
-    # Even and odd parts of induced voltage
-    V_beam_even = sgn.fftconvolve(I_beam_step, h_beam_even, mode='full')[:I_beam_step.shape[0]]
-    V_beam_odd = sgn.fftconvolve(I_beam_step, h_beam_odd, mode='full')[:I_beam_step.shape[0]]
-    # Normalised response
-    norm = np.max(V_beam_even)
-    V_beam_even /= norm
-    V_beam_odd /= norm
+    def WeigthingUni(Nt):
+        output = np.zeros((Nt, Nt))
+        for i in range(output.shape[0]):
+            for j in range(output.shape[1]):
+                if i == j:
+                    output[i, j] = uniform_weighting(i, Nt)
+        return output
 
-    if debug:
-        plt.rc('lines', linewidth=0.5, markersize=3)
-        plt.rc('axes', labelsize=12, labelweight='normal')
+    def EvenMatrix(Nt):
+        output = np.zeros((Nt, (Nt + 1) // 2))
+        for i in range(output.shape[0]):
+            for j in range(output.shape[1]):
+                if i + j == (Nt + 0) // 2:
+                    output[i, j] = 1
+                elif i - j == (Nt - 1) // 2:
+                    output[i, j] = 1
+        return output
 
-        plt.figure("Impulse response")
-        plt.plot(time_array * 1e6, h_beam_even, 'bo-', label='even')
-        plt.plot(time_array * 1e6, h_beam_odd, 'ro-', label='odd')
-        plt.plot(time_array * 1e6, h_beam_even + h_beam_odd, 'go-', label='total')
-        plt.axhline(0, color='grey', alpha=0.5)
-        plt.xlabel("Time [us]")
-        plt.legend()
+    def OddMatrix(Nt):
+        output = np.zeros((Nt, (Nt - 1) // 2))
+        for i in range(output.shape[0]):
+            for j in range(output.shape[1]):
+                if i + j == (Nt - 2) // 2:
+                    output[i, j] = -1
+                elif i - j == (Nt + 1) // 2:
+                    output[i, j] = 1
+        return output
 
-        plt.figure("Beam-induced voltage")
-        plt.plot(V_beam_even, 'bo-', label='even')
-        plt.plot(V_beam_odd, 'ro-', label='odd')
-        plt.plot(V_beam_even + V_beam_odd, 'go-', label='total')
-        plt.axhline(0, color='grey', alpha=0.5)
-        plt.xlabel("Samples [1]")
-        plt.legend()
+    def Hoptreal(Nt, L, P, Dvectoreven):
+        output = EvenMatrix(Nt).T @ Smatrix(P + L - 1, Nt).T @ Rmatrix(P, L).T @ Dvectoreven
 
-    # FIR filter even and odd parts
-    h_ff_even = even @ np.linalg.pinv(resp @ conv @ even) @ V_beam_even
-    h_ff_odd = odd @ np.linalg.pinv(resp @ conv @ odd) @ V_beam_odd
+        matrix1 = EvenMatrix(Nt)
+        matrix1 = Rmatrix(P, L).T @ WeigthingUni(P) @ Rmatrix(P, L) @ Smatrix(P + L - 1, Nt) @ matrix1
+        matrix1 = EvenMatrix(Nt).T @ Smatrix(P + L - 1, Nt).T @ matrix1
+        matrix1 = npla.inv(matrix1)
 
-    if debug:
-        plt.figure("FF filter")
-        plt.plot(h_ff_even, 'bo-', label='even')
-        plt.plot(h_ff_odd, 'ro-', label='odd')
-        plt.plot(h_ff_even + h_ff_odd, 'go-', label='total')
-        plt.axhline(0, color='grey', alpha=0.5)
-        plt.xlabel("Samples [1]")
-        plt.legend()
+        return matrix1 @ output
 
-        # Reconstructed signal
-        V_even = resp @ conv @ h_ff_even
-        V_odd = resp @ conv @ h_ff_odd
+    def Hoptimag(Nt, L, P, Dvectorodd):
+        output = OddMatrix(Nt).T @ Smatrix(P + L - 1, Nt).T @ Rmatrix(P, L).T @ WeigthingUni(P) @ Dvectorodd
+        matrix1 = OddMatrix(Nt)
+        matrix1 = Rmatrix(P, L).T @ WeigthingUni(P) @ Rmatrix(P, L) @ Smatrix(P + L - 1, Nt) @ matrix1
+        matrix1 = OddMatrix(Nt).T @ Smatrix(P + L - 1, Nt).T @ matrix1
+        matrix1 = npla.inv(matrix1)
 
-        plt.figure("Reconstructed signal")
-        plt.plot(V_even, 'bo-', label='even')
-        plt.plot(V_odd, 'ro-', label='odd')
-        plt.plot(V_even + V_odd, 'go-', label='total')
-        plt.axhline(0, color='grey', alpha=0.5)
-        plt.xlabel("Samples [1]")
-        plt.legend()
-        plt.show()
+        return matrix1 @ output
 
-    # Return with or without optional output
+    def Hopteven(Nt, L, P, Dvectoreven):
+        return np.concatenate([Hoptreal(Nt, L, P, Dvectoreven)[1:][::-1], Hoptreal(Nt, L, P, Dvectoreven)])
+
+    def Hoptodd(Nt, L, P, Dvectorodd):
+        output = np.concatenate([-Hoptimag(Nt, L, P, Dvectorodd)[::-1], np.array([0])])
+        return np.concatenate([output, Hoptimag(Nt, L, P, Dvectorodd)])
+
+    h_ff = Hopteven(n_taps, n_filling, n_fit, Dvectoreven) + Hoptodd(n_taps, n_filling, n_fit, Dvectorodd)
+
     if opt_output:
-        return h_ff_even + h_ff_odd, n_taps, n_filling, n_fit
+        return h_ff, n_taps, n_filling, n_fit
     else:
-        return h_ff_even + h_ff_odd
+        return h_ff
 
 
-feedforward_filter_TWC3_1 = np.array(
+feedforward_filter_TWC3 = np.array(
     [-0.00760838, 0.01686764, 0.00205761, 0.00205761,
      0.00205761, 0.00205761, -0.03497942, 0.00205761,
      0.00205761, 0.00205761, 0.00205761, -0.0053474,
@@ -643,41 +641,7 @@ feedforward_filter_TWC3_1 = np.array(
      0.03806584, -0.00205761, -0.00205761, -0.00205761,
      -0.00205761, -0.01686764, 0.00760838])
 
-feedforward_filter_TWC3_2 = (np.array([-5.68434189e-14-7.60838358e-03j, 0.00000000e+00+1.68676428e-02j,
-                                    2.27373675e-13+2.05761317e-03j, -2.27373675e-13+2.05761317e-03j,
-                                    6.82121026e-13+2.05761317e-03j, -9.09494702e-13+2.05761317e-03j,
-                                    1.54320988e-03-3.65226337e-02j, 3.08641975e-03-1.02880659e-03j,
-                                    3.08641975e-03-1.02880658e-03j, 3.08641976e-03-1.02880659e-03j,
-                                    3.08641975e-03-1.02880658e-03j, 3.08641975e-03-8.43382142e-03j,
-                                    3.08641977e-03+3.80419179e-03j, 3.08641972e-03-1.87583282e-12j,
-                                    3.08641979e-03-9.92983473e-13j, 3.08641972e-03+0.00000000e+00j,
-                                    3.08641979e-03+9.92983473e-13j, 3.08641972e-03+1.87583282e-12j,
-                                    3.08641977e-03-3.80419179e-03j, 3.08641975e-03+8.43382142e-03j,
-                                    3.08641975e-03+1.02880658e-03j, 3.08641976e-03+1.02880659e-03j,
-                                    3.08641975e-03+1.02880658e-03j, 3.08641975e-03+1.02880659e-03j,
-                                    1.54320988e-03+3.65226337e-02j, -9.09494702e-13-2.05761317e-03j,
-                                    6.82121026e-13-2.05761317e-03j, -2.27373675e-13-2.05761317e-03j,
-                                    2.27373675e-13-2.05761317e-03j, 0.00000000e+00-1.68676428e-02j,
-                                    -5.68434189e-14+7.60838358e-03j], dtype=complex))
-
-feedforward_filter_TWC3_3 = np.conj(np.array([-5.68434189e-14-7.60838358e-03j, 0.00000000e+00+1.68676428e-02j,
-                                    2.27373675e-13+2.05761317e-03j, -2.27373675e-13+2.05761317e-03j,
-                                    6.82121026e-13+2.05761317e-03j, -9.09494702e-13+2.05761317e-03j,
-                                    1.54320988e-03-3.65226337e-02j, 3.08641975e-03-1.02880659e-03j,
-                                    3.08641975e-03-1.02880658e-03j, 3.08641976e-03-1.02880659e-03j,
-                                    3.08641975e-03-1.02880658e-03j, 3.08641975e-03-8.43382142e-03j,
-                                    3.08641977e-03+3.80419179e-03j, 3.08641972e-03-1.87583282e-12j,
-                                    3.08641979e-03-9.92983473e-13j, 3.08641972e-03+0.00000000e+00j,
-                                    3.08641979e-03+9.92983473e-13j, 3.08641972e-03+1.87583282e-12j,
-                                    3.08641977e-03-3.80419179e-03j, 3.08641975e-03+8.43382142e-03j,
-                                    3.08641975e-03+1.02880658e-03j, 3.08641976e-03+1.02880659e-03j,
-                                    3.08641975e-03+1.02880658e-03j, 3.08641975e-03+1.02880659e-03j,
-                                    1.54320988e-03+3.65226337e-02j, -9.09494702e-13-2.05761317e-03j,
-                                    6.82121026e-13-2.05761317e-03j, -2.27373675e-13-2.05761317e-03j,
-                                    2.27373675e-13-2.05761317e-03j, 0.00000000e+00-1.68676428e-02j,
-                                    -5.68434189e-14+7.60838358e-03j], dtype=complex))
-
-feedforward_filter_TWC4_1 = np.array(
+feedforward_filter_TWC4 = np.array(
     [0.01050256, -0.0014359, 0.00106667, 0.00106667,
      0.00106667, -0.01226667, -0.01226667, 0.00106667,
      0.00106667, 0.00106667, 0.00231795, -0.00365128,
@@ -689,58 +653,28 @@ feedforward_filter_TWC4_1 = np.array(
      -0.00106667, -0.00106667, -0.00106667, 0.0014359,
      -0.01050256])
 
-feedforward_filter_TWC4_2 = (np.array([1.13686838e-13+1.05025641e-02j, -2.27373675e-13-1.43589744e-03j,
-                                    4.54747351e-13+1.06666667e-03j, -1.59161573e-12+1.06666667e-03j,
-                                    4.54747351e-13+1.06666667e-03j,  2.00000006e-04-1.24666667e-02j,
-                                    1.39999999e-03-1.36666667e-02j,  1.60000002e-03-5.33333336e-04j,
-                                    1.59999998e-03-5.33333329e-04j,  1.60000002e-03-5.33333340e-04j,
-                                    1.59999998e-03+7.17948727e-04j,  1.60000002e-03-5.25128206e-03j,
-                                    1.60000000e-03+1.43529633e-12j,  1.59999997e-03+5.76960701e-12j,
-                                    1.60000002e-03-3.83693077e-12j,  1.60000001e-03-7.05213665e-12j,
-                                    1.59999997e-03+1.90816252e-11j,  1.60000009e-03-1.96607175e-11j,
-                                    1.59999986e-03+0.00000000e+00j,  1.60000009e-03+1.96607175e-11j,
-                                    1.59999997e-03-1.90816252e-11j,  1.60000001e-03+7.05213665e-12j,
-                                    1.60000002e-03+3.83693077e-12j,  1.59999997e-03-5.76960701e-12j,
-                                    1.60000000e-03-1.43529633e-12j,  1.60000002e-03+5.25128206e-03j,
-                                    1.59999998e-03-7.17948727e-04j,  1.60000002e-03+5.33333340e-04j,
-                                    1.59999998e-03+5.33333329e-04j,  1.60000002e-03+5.33333336e-04j,
-                                    1.39999999e-03+1.36666667e-02j,  2.00000006e-04+1.24666667e-02j,
-                                    4.54747351e-13-1.06666667e-03j, -1.59161573e-12-1.06666667e-03j,
-                                    4.54747351e-13-1.06666667e-03j, -2.27373675e-13+1.43589744e-03j,
-                                    1.13686838e-13-1.05025641e-02j], dtype=complex))
-
-feedforward_filter_TWC4_3 = np.conj(np.array([1.13686838e-13+1.05025641e-02j, -2.27373675e-13-1.43589744e-03j,
-                                    4.54747351e-13+1.06666667e-03j, -1.59161573e-12+1.06666667e-03j,
-                                    4.54747351e-13+1.06666667e-03j,  2.00000006e-04-1.24666667e-02j,
-                                    1.39999999e-03-1.36666667e-02j,  1.60000002e-03-5.33333336e-04j,
-                                    1.59999998e-03-5.33333329e-04j,  1.60000002e-03-5.33333340e-04j,
-                                    1.59999998e-03+7.17948727e-04j,  1.60000002e-03-5.25128206e-03j,
-                                    1.60000000e-03+1.43529633e-12j,  1.59999997e-03+5.76960701e-12j,
-                                    1.60000002e-03-3.83693077e-12j,  1.60000001e-03-7.05213665e-12j,
-                                    1.59999997e-03+1.90816252e-11j,  1.60000009e-03-1.96607175e-11j,
-                                    1.59999986e-03+0.00000000e+00j,  1.60000009e-03+1.96607175e-11j,
-                                    1.59999997e-03-1.90816252e-11j,  1.60000001e-03+7.05213665e-12j,
-                                    1.60000002e-03+3.83693077e-12j,  1.59999997e-03-5.76960701e-12j,
-                                    1.60000000e-03-1.43529633e-12j,  1.60000002e-03+5.25128206e-03j,
-                                    1.59999998e-03-7.17948727e-04j,  1.60000002e-03+5.33333340e-04j,
-                                    1.59999998e-03+5.33333329e-04j,  1.60000002e-03+5.33333336e-04j,
-                                    1.39999999e-03+1.36666667e-02j,  2.00000006e-04+1.24666667e-02j,
-                                    4.54747351e-13-1.06666667e-03j, -1.59161573e-12-1.06666667e-03j,
-                                    4.54747351e-13-1.06666667e-03j, -2.27373675e-13+1.43589744e-03j,
-                                    1.13686838e-13-1.05025641e-02j], dtype=complex))
-
 feedforward_filter_TWC5 = np.array(
-    [0.0189205535, -0.0105637125, 0.0007262783, 0.0007262783,
-     0.0006531768, -0.0105310359, -0.0104579343, 0.0007262783,
-     0.0007262783, 0.0007262783, 0.0063272331, -0.0083221785,
-     0.0010894175, 0.0010894175, 0.0010894175, 0.0010894175,
-     0.0010894175, 0.0010894175, 0.0010894175, 0.0010894175,
-     0.0010894175, 0.0010894175, 0.0010894175, 0.0010894175,
-     0.0010894175, 0.0010894175, 0.0010894175, 0.0010894175,
-     0.0010894175, 0.0010894175, 0.0010894175, 0.0105496942,
-     -0.0041924387, 0.0014525567, 0.0014525567, 0.0013063535,
-     0.0114011487, 0.0104579343, -0.0007262783, -0.0007262783,
-     -0.0007262783, 0.0104756312, -0.018823192])
+    [0.01802423, -0.01004643,  0.00069372,  0.00069372,  0.00069372, -0.01005897,
+     -0.01005897,  0.00069372,  0.00069372,  0.00069372,  0.0060638,  -0.00797153,
+     0.00104058,  0.00104058,  0.00104058,  0.00104058,  0.00104058,  0.00104058,
+     0.00104058,  0.00104058,  0.00104058,  0.00104058,  0.00104058,  0.00104058,
+     0.00104058,  0.00104058,  0.00104058,  0.00104058,  0.00104058,  0.00104058,
+     0.00104058,  0.0100527,  -0.00398263,  0.00138744,  0.00138744,  0.00138744,
+     0.01187999,  0.01031911, -0.00069372, -0.00069372, -0.00069372,  0.01004643,
+     -0.01802423])
+
+#feedforward_filter_TWC5 = np.array(
+#    [0.0189205535, -0.0105637125, 0.0007262783, 0.0007262783,
+#     0.0006531768, -0.0105310359, -0.0104579343, 0.0007262783,
+#     0.0007262783, 0.0007262783, 0.0063272331, -0.0083221785,
+#     0.0010894175, 0.0010894175, 0.0010894175, 0.0010894175,
+#     0.0010894175, 0.0010894175, 0.0010894175, 0.0010894175,
+#     0.0010894175, 0.0010894175, 0.0010894175, 0.0010894175,
+#     0.0010894175, 0.0010894175, 0.0010894175, 0.0010894175,
+#     0.0010894175, 0.0010894175, 0.0010894175, 0.0105496942,
+#     -0.0041924387, 0.0014525567, 0.0014525567, 0.0013063535,
+#     0.0114011487, 0.0104579343, -0.0007262783, -0.0007262783,
+#     -0.0007262783, 0.0104756312, -0.018823192])
 
 
 def plot_frequency_response(b, a=1):

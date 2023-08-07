@@ -10,17 +10,17 @@
 '''
 **Filters and methods for control loops**
 
-:Authors: **Birk Emil Karlsen-Baeck**, **Helga Timko**
+:Authors: **Birk Emil Karlsen-Bæck**, **Helga Timko**
 '''
 
 from __future__ import division
 
-# Set up logging
-import logging
-
+import matplotlib.pyplot as plt
 import numpy as np
 from scipy.constants import c
 
+# Set up logging
+import logging
 logger = logging.getLogger(__name__)
 
 
