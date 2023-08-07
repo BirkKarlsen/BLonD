@@ -247,18 +247,6 @@ class LHCCavityLoopCommissioning:
         Simulate clamping (True) or not (False); default is False
     excitation : bool
         Perform BBNA measurement of the feedback (True); default is False
-
-
-    Attributes
-    ----------
-    d_phi_ad : float
-        Phase misalignment of digital FB w.r.t. analog FB [rad]
-    open_drive : int(bool)
-        Open (0) or closed (1) cavity loop at drive; default is 1
-    open_loop : int(bool)
-        Open (0) or closed (1) cavity loop at RFFB; default is 1
-    open_rffb : int(bool)
-        Open (0) or closed (1) RFFB; default is 1
     '''
 
     def __init__(self, alpha=15/16, d_phi_ad=0, G_a=0.00001, G_d=10, G_o=10,
@@ -829,22 +817,6 @@ class SPSCavityFeedback:
         same convetion as G_ff; default is 0
     Commissioning : class
         An SPSCavityLoopCommissioning type class
-
-    Attributes
-    ----------
-    OTFB_1 : class
-        An SPSOneTurnFeedback type class; 3/4-section cavity for post/pre-LS2
-    OTFB_2 : class
-        An SPSOneTurnFeedback type class; 4/5-section cavity for post/pre-LS2
-    V_sum : complex array
-        Vector sum of RF voltage from all the cavities
-    V_corr : float array
-        RF voltage correction array to be applied in the tracker
-    phi_corr : float array
-        RF phase correction array to be applied in the tracker
-    logger : logger
-        Logger of the present class
-
     """
 
     def __init__(self, RFStation, Profile, G_ff=1, G_llrf=10, G_tx=0.5,
@@ -1037,20 +1009,6 @@ class LHCCavityLoop(CavityFeedback):
         Total loop delay as seen by OTFB [s]; default is 1472e-9 s
     RFFB : class
         LHCRFFeedback type class containing RF FB gains and delays
-
-    Attributes
-    ----------
-    n_coarse : int
-        Number of bins for the coarse grid (equals harmonic number)
-    t_centers : float array
-        Time shift w.r.t. clock, corresponding to voltage arrays
-    omega_c : float
-        Central cavity revolution frequency [1/s]
-    V_coarse_tot : complex array
-        Cavity voltage [V] at present turn in (I,Q) coordinates which is used
-        for tracking the LLRF
-    logger : logger
-        Logger of the present class
     '''
 
     def __init__(self, RFStation, Profile, n_cavities=8, f_c=400.789e6, G_gen=1, I_gen_offset=0, n_pretrack=200,
