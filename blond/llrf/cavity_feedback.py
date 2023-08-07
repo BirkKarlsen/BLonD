@@ -41,7 +41,7 @@ from blond.utils import bmath as bm
 
 
 class CavityFeedback:
-    """Parent class for implementing cavity feedback models interfacing with BLonD
+    r"""Parent class for implementing cavity feedback models interfacing with BLonD
 
     Parameters
     ----------
@@ -51,6 +51,10 @@ class CavityFeedback:
         A Beam type class
     Profile : class
         A Profile type class
+    n_cavities : int
+        Number of cavities the feedback is acting with
+    n_s : int
+        The number of RF periods the coarse grid sampling period corresponds to
     """
 
     def __init__(self, RFStation, Profile, n_cavities, n_s):
@@ -160,36 +164,36 @@ class CavityFeedback:
 
 
 class SPSCavityLoopCommissioning:
+    r"""Class containing commissioning settings for the cavity feedback
+
+    Parameters
+    ----------
+    debug : bool
+        Debugging output active (True/False); default is False
+    open_loop : int(bool)
+        Open (True) or closed (False) cavity loop; default is False
+    open_FB : int(bool)
+        Open (True) or closed (False) feedback; default is False
+    open_drive : int(bool)
+        Open (True) or closed (False) drive; default is False
+    open_FF : int(bool)
+        Open (True) or closed (False) feed-forward; default is False
+    V_SET : complex array
+        Array set point voltage; default is False
+    cpp_conv : bool
+        Enable (True) or disable (False) convolutions using a C++ implementation; default is False
+    pwr_clamp : bool
+        Enable (True) or disable (False) power clamping; default is False
+    rot_IQ : complex
+        Option to rotate the set point and beam induced voltages in the complex plane.
+    excitation : bool
+        Excite the model with white noise to perform BBNA measurements
+    """
 
     def __init__(self, debug=False, open_loop=False, open_FB=False,
                  open_drive=False, open_FF=False, V_SET=None,
                  cpp_conv=False, pwr_clamp=False, rot_IQ=1,
                  excitation=False):
-        """Class containing commissioning settings for the cavity feedback
-
-        Parameters
-        ----------
-        debug : bool
-            Debugging output active (True/False); default is False
-        open_loop : int(bool)
-            Open (True) or closed (False) cavity loop; default is False
-        open_FB : int(bool)
-            Open (True) or closed (False) feedback; default is False
-        open_drive : int(bool)
-            Open (True) or closed (False) drive; default is False
-        open_FF : int(bool)
-            Open (True) or closed (False) feed-forward; default is False
-        V_SET : complex array
-            Array set point voltage; default is False
-        cpp_conv : bool
-            Enable (True) or disable (False) convolutions using a C++ implementation; default is False
-        pwr_clamp : bool
-            Enable (True) or disable (False) power clamping; default is False
-        rot_IQ : complex
-            Option to rotate the set point and beam induced voltages in the complex plane.
-        excitation : bool
-            Excite the model with white noise to perform BBNA measurements
-        """
 
         self.debug = bool(debug)
         # Multiply with zeros if open == True
@@ -225,6 +229,10 @@ class LHCCavityLoopCommissioning:
         Digital FB delay time [s]
     tau_o : float
         AC-coupling delay time of one-turn feedback [s]
+    mu : float
+        Coefficient for the tuner algorithm determining time scale; default is -0.0001
+    power_thres : float
+        Available RF power in the klystron; default is 300 kW
     open_drive : bool
         Open (True) or closed (False) cavity loop at drive; default is False
     open_loop : bool
@@ -233,6 +241,13 @@ class LHCCavityLoopCommissioning:
         Open (true) or closed (False) one-turn feedback; default is False
     open_rffb : bool
         Open (True) or closed (False) RFFB; default is False
+    open_tuner : bool
+        Open (True) or closed (False) tuner control; default is False
+    clamping : bool
+        Simulate clamping (True) or not (False); default is False
+    excitation : bool
+        Perform BBNA measurement of the feedback (True); default is False
+
 
     Attributes
     ----------
@@ -290,8 +305,35 @@ class LHCCavityLoopCommissioning:
 
 
 class SPSOneTurnFeedback(CavityFeedback):
+    r'''The SPS one-turn delay feedback and feedforward model in BLonD for a single cavity type.
 
-    def __init__(self, RFStation, Profile, n_sections, n_cavities=4, V_part=4/9, G_ff=1, G_llrf=10, G_tx=0.5,
+    Parameters
+    ----------
+    RFStation : class
+        An RFStation type class
+    Profile : class
+        A Profile type class
+    n_sections : int
+        Number of sections of the traveling wave cavity
+    n_cavities : int
+        Number of traveling wave cavities of this type; default is 4
+    V_part : float
+        Partitioning of the total voltage onto this cavity type; default is 4/9
+    G_ff : float
+        Feedforward gain; default is 1
+    G_llrf : float
+        Low-level RF gain; default is 10
+    G_tx : float
+        Transmitter gain; default is 1
+    a_comb : float
+        Comb filter coefficient; default is 63/64
+    df : float
+        Change of the TWC central frequency in Hz from the 2021 measurement; default is 0 Hz
+    Commissioning : class
+        A SPSCavityLoopCommissioning type class
+    '''
+
+    def __init__(self, RFStation, Profile, n_sections, n_cavities=4, V_part=4/9, G_ff=1, G_llrf=10, G_tx=1,
                  a_comb=63/64, df=0, Commissioning=SPSCavityLoopCommissioning()):
         super().__init__(RFStation=RFStation, Profile=Profile, n_cavities=n_cavities, n_s=1)
 
@@ -757,8 +799,6 @@ class SPSCavityFeedback:
     ----------
     RFStation : class
         An RFStation type class
-    Beam : class
-        A Beam type class
     Profile : class
         A Profile type class
     G_ff : float or list
@@ -787,6 +827,8 @@ class SPSCavityFeedback:
     df : float or list
         Frequency difference between measured frequency and desired frequency;
         same convetion as G_ff; default is 0
+    Commissioning : class
+        An SPSCavityLoopCommissioning type class
 
     Attributes
     ----------
@@ -975,28 +1017,26 @@ class LHCCavityLoop(CavityFeedback):
         An RFStation type class
     Profile : class
         Beam profile object
+    n_cavities : int
+        Number of cavities per beam; default is 8
+    f_c : float
+        Central cavity frequency [Hz]; default is 400.789e6 Hz
+    G_gen : float
+        Overall driver chain gain [1]; default is 1
+    I_gen_offset : float
+        Generator current offset [A]; default is 0
+    n_pretrack : int
+        Number of turns to pre-track without beam; default is 200
+    Q_L : float
+        Cavity loaded quality factor; default is 20000
+    R_over_Q : float
+        Cavity R/Q [Ohm]; default is 45 Ohms
+    tau_loop : float
+        Total loop delay [s]; default is 650e-9 s
+    tau_otfb : float
+        Total loop delay as seen by OTFB [s]; default is 1472e-9 s
     RFFB : class
         LHCRFFeedback type class containing RF FB gains and delays
-    f_c : float
-        Central cavity frequency [Hz]
-    G_gen : float
-        Overall driver chain gain [1]
-    I_gen_offset : float
-        Generator current offset [A]
-    n_cav : int
-        Number of cavities per beam (default is 8)
-    n_pretrack : int
-        Number of turns to pre-track without beam (default is 1)
-    Q_L : float
-        Cavity loaded quality factor (default is 20000)
-    R_over_Q : float
-        Cavity R/Q [Ohm] (default is 45 Ohms)
-    tau_loop : float
-        Total loop delay [s]
-    tau_otfb : float
-        Total loop delay as seen by OTFB [s]
-    Ts : float
-        Sampling time of the LLRF loops [s] (default is 25 ns)
 
     Attributes
     ----------
