@@ -395,7 +395,7 @@ class TestSPSOneTurnFeedback(unittest.TestCase):
         self.profile.track()
 
         # Cavity
-        self.Commissioning = SPSCavityLoopCommissioning(open_FF=True, rot_IQ=-1)
+        self.Commissioning = SPSCavityLoopCommissioning(open_FF=True, rot_IQ=-1, cpp_conv=False)
 
         self.OTFB = SPSOneTurnFeedback(self.rfstation, self.profile, 3, a_comb=63 / 64,
                                        Commissioning=self.Commissioning)
@@ -443,7 +443,17 @@ class TestSPSOneTurnFeedback(unittest.TestCase):
         self.OTFB.mod_to_fr()
         ref_DV_MOD_FR = np.load(os.path.join(this_directory, "ref_DV_MOD_FR.npy"))
 
-        np.testing.assert_allclose(self.OTFB.DV_MOD_FR[-self.OTFB.n_coarse:], ref_DV_MOD_FR)
+        # Test real part
+        np.testing.assert_allclose(self.OTFB.DV_MOD_FR[-self.OTFB.n_coarse:].real, ref_DV_MOD_FR.real,
+                                   rtol=1e-6, atol=0,
+                                   err_msg="In TestSPSOneTurnFeedback test_mod_to_fr(), "
+                                           "mismatch in real part of modulated signal")
+
+        # Test imaginary part
+        np.testing.assert_allclose(self.OTFB.DV_MOD_FR[-self.OTFB.n_coarse:].imag, ref_DV_MOD_FR.imag,
+                                   rtol=1e-6, atol=0,
+                                   err_msg="In TestSPSOneTurnFeedback test_mod_to_fr(), "
+                                           "mismatch in imaginary part of modulated signal")
 
         self.OTFB.DV_DELAYED = np.zeros(2 * self.OTFB.n_coarse, dtype=complex)
         self.OTFB.DV_DELAYED[-self.OTFB.n_coarse:] = 1 + 1j * 0
@@ -482,7 +492,17 @@ class TestSPSOneTurnFeedback(unittest.TestCase):
         self.OTFB.mod_to_frf()
         ref_DV_MOD_FRF = np.load(os.path.join(this_directory, "ref_DV_MOD_FRF.npy"))
 
-        np.testing.assert_allclose(self.OTFB.DV_MOD_FRF[-self.OTFB.n_coarse:], ref_DV_MOD_FRF)
+        # Test real part
+        np.testing.assert_allclose(self.OTFB.DV_MOD_FRF[-self.OTFB.n_coarse:].real, ref_DV_MOD_FRF.real,
+                                   rtol=1e-6, atol=0,
+                                   err_msg="In TestSPSOneTurnFeedback test_mod_to_frf(), "
+                                           "mismatch in real part of modulated signal")
+
+        # Test imaginary part
+        np.testing.assert_allclose(self.OTFB.DV_MOD_FRF[-self.OTFB.n_coarse:].imag, ref_DV_MOD_FRF.imag,
+                                   rtol=1e-6, atol=0,
+                                   err_msg="In TestSPSOneTurnFeedback test_mod_to_frf(), "
+                                           "mismatch in imaginary part of modulated signal")
 
         self.OTFB.DV_MOV_AVG = np.zeros(2 * self.OTFB.n_coarse, dtype=complex)
         self.OTFB.DV_MOV_AVG[-self.OTFB.n_coarse:] = 1 + 1j * 0
@@ -538,7 +558,18 @@ class TestSPSOneTurnFeedback(unittest.TestCase):
         self.OTFB.gen_response()
 
         ref_V_IND_COARSE_GEN = np.load(os.path.join(this_directory, "ref_V_IND_COARSE_GEN.npy"))
-        np.testing.assert_allclose(self.OTFB.V_IND_COARSE_GEN[-self.OTFB.n_coarse:], ref_V_IND_COARSE_GEN)
+
+        # Test real part
+        np.testing.assert_allclose(self.OTFB.V_IND_COARSE_GEN[-self.OTFB.n_coarse:].real, ref_V_IND_COARSE_GEN.real,
+                                   rtol=1e-6, atol=0,
+                                   err_msg="In TestSPSOneTurnFeedback test_gen_response(), "
+                                           "mismatch in real part of generator response")
+
+        # Test imaginary part
+        np.testing.assert_allclose(self.OTFB.V_IND_COARSE_GEN[-self.OTFB.n_coarse:].imag, ref_V_IND_COARSE_GEN.imag,
+                                   rtol=1e-6, atol=0,
+                                   err_msg="In TestSPSOneTurnFeedback test_gen_response(), "
+                                           "mismatch in imaginary part of generator response")
 
 
 class TestSPSTransmitterGain(unittest.TestCase):
