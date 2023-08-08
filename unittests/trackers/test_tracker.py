@@ -130,6 +130,9 @@ class CavityFB:
         self.V_corr = V
         self.phi_corr = phi
 
+    def track(self):
+        pass
+
 
 class TestRfVoltageCalcWCavityFB(unittest.TestCase):
     # Simulation parameters -------------------------------------------------------
