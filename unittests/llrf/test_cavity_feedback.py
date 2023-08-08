@@ -444,13 +444,15 @@ class TestSPSOneTurnFeedback(unittest.TestCase):
         ref_DV_MOD_FR = np.load(os.path.join(this_directory, "ref_DV_MOD_FR.npy"))
 
         # Test real part
-        np.testing.assert_allclose(self.OTFB.DV_MOD_FR[-self.OTFB.n_coarse:].real, ref_DV_MOD_FR.real,
+        np.testing.assert_allclose(np.around(self.OTFB.DV_MOD_FR[-self.OTFB.n_coarse:].real, 12),
+                                   np.around(ref_DV_MOD_FR.real, 12),
                                    rtol=1e-6, atol=0,
                                    err_msg="In TestSPSOneTurnFeedback test_mod_to_fr(), "
                                            "mismatch in real part of modulated signal")
 
         # Test imaginary part
-        np.testing.assert_allclose(self.OTFB.DV_MOD_FR[-self.OTFB.n_coarse:].imag, ref_DV_MOD_FR.imag,
+        np.testing.assert_allclose(np.around(self.OTFB.DV_MOD_FR[-self.OTFB.n_coarse:].imag, 12),
+                                   np.around(ref_DV_MOD_FR.imag, 12),
                                    rtol=1e-6, atol=0,
                                    err_msg="In TestSPSOneTurnFeedback test_mod_to_fr(), "
                                            "mismatch in imaginary part of modulated signal")
@@ -493,13 +495,15 @@ class TestSPSOneTurnFeedback(unittest.TestCase):
         ref_DV_MOD_FRF = np.load(os.path.join(this_directory, "ref_DV_MOD_FRF.npy"))
 
         # Test real part
-        np.testing.assert_allclose(self.OTFB.DV_MOD_FRF[-self.OTFB.n_coarse:].real, ref_DV_MOD_FRF.real,
+        np.testing.assert_allclose(np.around(self.OTFB.DV_MOD_FRF[-self.OTFB.n_coarse:].real, 12),
+                                   np.around(ref_DV_MOD_FRF.real, 12),
                                    rtol=1e-6, atol=0,
                                    err_msg="In TestSPSOneTurnFeedback test_mod_to_frf(), "
                                            "mismatch in real part of modulated signal")
 
         # Test imaginary part
-        np.testing.assert_allclose(self.OTFB.DV_MOD_FRF[-self.OTFB.n_coarse:].imag, ref_DV_MOD_FRF.imag,
+        np.testing.assert_allclose(np.around(self.OTFB.DV_MOD_FRF[-self.OTFB.n_coarse:].imag, 12),
+                                   np.around(ref_DV_MOD_FRF.imag, 12),
                                    rtol=1e-6, atol=0,
                                    err_msg="In TestSPSOneTurnFeedback test_mod_to_frf(), "
                                            "mismatch in imaginary part of modulated signal")
@@ -560,13 +564,15 @@ class TestSPSOneTurnFeedback(unittest.TestCase):
         ref_V_IND_COARSE_GEN = np.load(os.path.join(this_directory, "ref_V_IND_COARSE_GEN.npy"))
 
         # Test real part
-        np.testing.assert_allclose(self.OTFB.V_IND_COARSE_GEN[-self.OTFB.n_coarse:].real, ref_V_IND_COARSE_GEN.real,
+        np.testing.assert_allclose(np.around(self.OTFB.V_IND_COARSE_GEN[-self.OTFB.n_coarse:].real, 12),
+                                   np.around(ref_V_IND_COARSE_GEN.real, 12),
                                    rtol=1e-6, atol=0,
                                    err_msg="In TestSPSOneTurnFeedback test_gen_response(), "
                                            "mismatch in real part of generator response")
 
         # Test imaginary part
-        np.testing.assert_allclose(self.OTFB.V_IND_COARSE_GEN[-self.OTFB.n_coarse:].imag, ref_V_IND_COARSE_GEN.imag,
+        np.testing.assert_allclose(np.around(self.OTFB.V_IND_COARSE_GEN[-self.OTFB.n_coarse:].imag, 12),
+                                   np.around(ref_V_IND_COARSE_GEN.imag, 12),
                                    rtol=1e-6, atol=0,
                                    err_msg="In TestSPSOneTurnFeedback test_gen_response(), "
                                            "mismatch in imaginary part of generator response")

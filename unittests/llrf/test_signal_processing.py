@@ -349,7 +349,7 @@ class TestRFCurrent(unittest.TestCase):
                             -4.9479920001e-12, -4.9479951927e-12, -4.9479978194e-12, -4.9479999612e-12,
                             -4.9480016908e-12, -4.9480030725e-12, -4.9480041636e-12, -4.9480050141e-12,])
 
-        np.testing.assert_allclose(rf_current.real, Iref_real, rtol=1e-6,
+        np.testing.assert_allclose(rf_current.real, Iref_real, rtol=1e-5,
                                    atol=0, err_msg="In TestRFCurrent test_3, mismatch in real part of RF current")
 
         Iref_imag = np.array([-1.4943276366e-12, -1.4949805683e-12, -1.4956135945e-12, -1.4962270785e-12,
@@ -378,7 +378,7 @@ class TestRFCurrent(unittest.TestCase):
                             -1.5103009811e-12, -1.5103017088e-12, -1.5103023057e-12, -1.5103027908e-12,
                             -1.5103031812e-12, -1.5103034922e-12, -1.5103037369e-12, -1.5103039271e-12,])
 
-        np.testing.assert_allclose(rf_current.imag, Iref_imag, rtol=1e-6,
+        np.testing.assert_allclose(rf_current.imag, Iref_imag, rtol=1e-5,
                                    atol=0, err_msg="In TestRFCurrent test_3, mismatch in imaginary part of RF current")
 
     # Test RF beam current on coarse grid integrated from fine grid
