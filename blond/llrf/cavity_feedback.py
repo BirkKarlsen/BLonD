@@ -87,7 +87,7 @@ class CavityFeedback:
 
     def circuit_track(self, no_beam=False):
         r'''Method to track circuit of the feedback. This is meant to be implemented in the child class by the user.'''
-        pass
+        self.V_ANT_FINE[-self.profile.n_slices:] = self.rfstation.voltage[0, self.counter] * np.exp(0 * 1j)
 
     def update_fb_variables(self):
         r'''Method to update the variables in the feedback.
@@ -158,7 +158,7 @@ class CavityFeedback:
         self.rf_centers_prev = np.copy(self.rf_centers)
 
         # Residual part of last turn entering the current turn due to non-integer harmonic number
-        self.dT = -self.rfstation.phi_rf[0, self.counter + 1] / self.omega_rf
+        self.dT = -self.rfstation.phi_rf[0, self.counter] / self.omega_rf
         self.rf_centers = (np.arange(self.n_coarse) + 0.5 / self.n_s) * self.T_s + self.dT
 
 
